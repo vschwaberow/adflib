@@ -23,7 +23,7 @@ Author(s): Volker Schwaberow
 
 // constant values for the file system
 pub const FSMASK_FFS: u8 = 1;
-pub const FSMASK_OFS: u8 = 2;
+pub const FSMASK_INTL: u8 = 2;
 pub const FSMASK_DIRCACHE: u8 = 4;
 
 // constant values for the block type   
