@@ -1,0 +1,11 @@
+[package]
+name = "adflib"
+version = "0.0.1"
+edition = "2021"
+license = "MIT/Apache-2.0"
+authors = ["Volker Schwaberow <volker@schwaberow.de>"]
+description = "adflib is a library to handle amiga disk files"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
