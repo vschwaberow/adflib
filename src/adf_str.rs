@@ -17,8 +17,32 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
-#![allow(dead_code)]
 
-pub mod adf_blk;
-pub mod adf_file;
-pub mod adf_str;
+const DEVICETYPE_FLOPDD: u32 = 1;
+const DEVICETYPE_FLOPHD: u32 = 2;
+const DEVICETYPE_HARDDISK: u32 = 3;
+const DEVICETYPE_HARDFILE: u32 = 4;
+
+pub struct Volume {
+    // struct Device *dev;
+    firstblock: u32,
+    lastblock: u32,
+    rootblock: u32,
+
+    dos_type: u8,
+    boot_code: bool,
+    read_only: bool,
+
+    datablocksize: u16,
+    blocksize: u16,
+
+    volume_name: str,
+    mounted: bool,
+    dirty: bool,
+
+    bitmap_size: u32,
+    bitmap_blocks: u32,
+    
+    current_dir_ptr: u32,
+
+}

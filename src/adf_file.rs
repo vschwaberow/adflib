@@ -17,8 +17,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
-#![allow(dead_code)]
 
-pub mod adf_blk;
-pub mod adf_file;
-pub mod adf_str;
+pub fn adf_open_file(vol: &mut Volume, name: &str, mode: &str) -> Option<File> {
+
+}

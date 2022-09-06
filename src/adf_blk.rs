@@ -18,9 +18,6 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
-
-
-
 // constant values for the file system
 pub const FSMASK_FFS: u8 = 1;
 pub const FSMASK_INTL: u8 = 2;
@@ -29,7 +26,7 @@ pub const FSMASK_DIRCACHE: u8 = 4;
 // constant values for the block type   
 
 pub const MAXNAMELENGTH: usize = 30;
-pub const MAXCOMMANDLENGTH: usize = 79;
+pub const MAXCOMMENTLENGTH: usize = 79;
 pub const HT_SIZE: usize = 72;
 pub const BM_SIZE: usize = 25;
 pub const MAX_DATABLOCK: usize = 72;
@@ -77,3 +74,103 @@ pub struct RootBlock {
     extension: i32,
     sectype: i32,
 }
+
+pub struct Fileheaderblock {
+    amiga_type: i32,		
+    headerkey: i32,	
+    highseq: i32,	
+    datasize: i32,	
+    firstdata: i32,
+    checksum: u32,
+    datablocks: [i32; MAX_DATABLOCK],
+    r1: i32,
+    r2: i32,
+    access: i32,	
+    bytesize: u32,
+    commlen: u8,
+    comment: [u8; MAXCOMMENTLENGTH+1],
+    days: i32,
+    mins: i32,
+    ticks: i32,
+    namelen: u8,
+    filename: [u8; MAXNAMELENGTH+1],
+    real: i32,		
+    nextlink: i32,	
+    nextsamehash: i32,	
+    parent: i32,		
+    extension: i32,
+    sectype: i32,	
+}
+
+pub struct Directoryblock {
+    amiga_type: i32,
+    headerkey: i32,
+    highseq: i32,
+    hashtabsize: i32,
+    r1: i32,
+    hashtable: [i32; HT_SIZE],
+    r2: [i32; 2],
+    access: i32,
+    r4: i32,
+    commlen: u8,
+    comment: [u8; MAXCOMMENTLENGTH+1],
+    r5: [u8; 91-(MAXCOMMENTLENGTH+1)],
+    days: i32,
+    mins: i32,
+    ticks: i32,
+    namelen: u8,
+    dirname: [u8; MAXNAMELENGTH+1],
+    r6: i32,
+    real: i32,
+    nextlink: i32,
+    r7: [i32; 5],
+    nextsamehash: i32,
+    parent: i32,
+    extension: i32,
+    sectype: i32
+}
+
+pub struct OFSDatablock {
+    pub amiga_type: i32,
+    pub headerkey: i32,
+    pub seqnum: i32,
+    pub datasize: i32,
+    pub nextdata: i32,
+    pub checksum: u32,
+    pub data: [u8; 488],
+}
+
+pub struct Bitmapblock {
+    checksum: u32,
+    map: [u32; 127]
+}
+
+pub struct Bitmapextblock {
+    bmpages: [i32; 127],
+    nextblock: i32
+}
+
+pub struct Linkblock {
+    amiga_type: i32,      
+    headerkey: i32, 
+    r1: [i32; 3],
+    checksum: u32,
+    realname: [u8; 64],
+    r2: [i32; 83],
+    days: i32,     
+    mins: i32,
+    ticks: i32,
+    namelen: u8,
+    name: [u8; MAXNAMELENGTH + 1],
+    r3: i32,
+    realentry: i32,
+    nextlink: i32,
+    r4: [i32; 5],
+    nextsamehash: i32,
+    parent: i32,
+    r5: i32,
+    sectype: i32,  
+}
+
+
+
