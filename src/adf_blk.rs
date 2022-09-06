@@ -42,23 +42,23 @@ pub fn is_intl(c: u8) -> bool { (c & FSMASK_INTL) != 0 }
 pub fn is_dircache(c: u8) -> bool { (c & FSMASK_DIRCACHE) != 0 }
 
 
-pub struct BBootBlock {
+pub struct BootBlock {
     dostype: [char; 4],
     checksum: u32,
     rootblock: i32,
     data: [u8; 500+512]
 }
 
-pub struct BRootBlock {
+pub struct RootBlock {
     amiga_type: i32,
     headerkey: i32,
     highseq: i32,
     hashtablesize: i32,
     firstdata: i32,
     checksum: u32,
-    hashtable: [i32; ht_size],
+    hashtable: [i32; HT_SIZE],
     bmflag: i32,
-    bmpages: [i32; bm_size],
+    bmpages: [i32; BM_SIZE],
     bmext: i32,
     cdays: i32,
     cmins: i32,
