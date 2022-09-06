@@ -40,7 +40,7 @@ pub fn is_dircache(c: u8) -> bool { (c & FSMASK_DIRCACHE) != 0 }
 
 
 pub struct BootBlock {
-    dostype: [char; 4],
+    dostype: [u8; 4],
     checksum: u32,
     rootblock: i32,
     data: [u8; 500+512]
