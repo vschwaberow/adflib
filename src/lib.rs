@@ -17,6 +17,6 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
-#[warn(dead_code)]
+#![allow(dead_code)]
 
 pub mod adf_blk;

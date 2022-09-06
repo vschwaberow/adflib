@@ -19,7 +19,7 @@ Author(s): Volker Schwaberow
 */
 
 
-#[warn(dead_code)]
+
 
 // constant values for the file system
 pub const FSMASK_FFS: u8 = 1;
