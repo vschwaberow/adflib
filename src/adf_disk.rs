@@ -17,19 +17,52 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
-#![allow(dead_code)]
 
-pub mod adf_blk;
-pub mod adf_disk;
-pub mod adf_err;
-pub mod adf_file;
-pub mod adf_raw;
-pub mod adf_str;
+use crate::adf_err::*;
+use crate::adf_blk::*;
+use crate::adf_raw::*;
+use crate::adf_str::*;
 
-#[cfg(test)]
-mod adf_tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+/// It reads the boot block, copies the boot code into it, and writes it back
+/// 
+/// Arguments:
+/// 
+/// * `vol`: a pointer to a Volume structure
+/// * `code`: The boot code to be written to the disk.
+/// 
+/// Returns:
+/// 
+/// The return code of the function.
+pub fn adf_install_boot_block(vol: &mut Volume, code: &mut [u8; 1024]) -> i32 {
+    let mut i: i32;
+    let mut boot: BootBlock;
+
+    let device_type = vol.device.device_type;
+
+    if device_type != DEVICETYPE_FLOPDD && device_type != DEVICETYPE_FLOPHD {
+        return RC_ERROR;
     }
+
+    if adf_read_boot_block(vol, &mut boot) != RC_OK {
+        return RC_ERROR;
+    }
+
+    boot.rootblock = 880;
+    for i in 0..1024-12 {         /* bootcode */
+        boot.data[i] = code[i+12];
+    }
+
+    if adf_write_boot_block(vol, &mut boot) != RC_OK {
+        return RC_ERROR;
+    }
+
+    vol.boot_code = true;
+
+    RC_OK
 }
+
+
+
+
+
+
