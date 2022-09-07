@@ -26,6 +26,7 @@ use crate::adf_str::*;
 
 pub fn adf_read_boot_block(vol: &mut Volume, boot: &mut BootBlock) -> i32 {
 
-    
+    let mut buffer: [u8; 1024]
+
     RC_OK
 }
