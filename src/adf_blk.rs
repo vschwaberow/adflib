@@ -18,6 +18,8 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
+use crate::adf_str::*;
+
 // constant values for the file system
 pub const FSMASK_FFS: u8 = 1;
 pub const FSMASK_INTL: u8 = 2;
@@ -173,4 +175,32 @@ pub struct Linkblock {
 }
 
 
+fn adf_read_block(vol: &mut Volume, nSect: i32, buf: &mut [u8]) -> i32 {
+    let mut pSect: i32;
+    let mut nFct: &mut NativeFunctions;
+    let mut rc: i32;
+
+    if !vol.mounted {
+        return RC_ERROR;
+    }
+
+    pSect = nSect + vol.firstBlock;
+
+    if adf_environment::use_rw_access {
+        // TODO: implement
+    }
+
+    if pSect < vol.firstBlock || pSect > vol.lastBlock {
+        // TODO: implement
+    }
+
+    nFct = adf_environment.
+
+
+    if rc != RC_OK {
+        return RC_ERROR;
+    } else {
+        return RC_OK;
+    }
+}
 
