@@ -71,6 +71,8 @@ pub struct Amigafile {
     pub write_mode: bool,
 }
 
+pub const NATIVE_FILE: u32 = 0x8001;
+
 pub struct NativeDevice {
     // TODO: implement file descriptor
 }
@@ -88,8 +90,26 @@ impl NativeFunctions {
     }
 
     pub fn init_device(device: &Device, name: &str, ro: bool) {
-
+        // TODO: implement
 
     }
+
+    pub fn read_sector(device: &Device, sector: u32, buffer: &mut Vec<u8>) {
+        // TODO: implement
+    }
+
+    pub fn write_sector(device: &Device, sector: u32, buffer: &mut Vec<u8>) {
+        // TODO: implement
+    }
+
+    pub fn release_device(device: &Device) {
+        // TODO: implement
+    }
+
+    pub fn is_device_native(device: &Device) -> bool {
+
+    }
+
+
 
 }
