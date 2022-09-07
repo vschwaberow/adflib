@@ -1,3 +1,4 @@
+
 /*
 Copyright 2022 Volker Schwaberow <volker@schwaberow.de>
 Permission is hereby granted, free of charge, to any person obtaining a
@@ -17,19 +18,6 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
-#![allow(dead_code)]
 
-pub mod adf_blk;
-pub mod adf_disk;
-pub mod adf_err;
-pub mod adf_file;
-pub mod adf_raw;
-pub mod adf_str;
-
-#[cfg(test)]
-mod adf_tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub const RC_OK: i32 = 0;
+pub const RC_ERROR: i32 = -1;

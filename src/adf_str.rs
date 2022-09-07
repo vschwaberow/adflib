@@ -18,31 +18,78 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
-const DEVICETYPE_FLOPDD: u32 = 1;
-const DEVICETYPE_FLOPHD: u32 = 2;
-const DEVICETYPE_HARDDISK: u32 = 3;
-const DEVICETYPE_HARDFILE: u32 = 4;
+
+
+pub const DEVICETYPE_FLOPDD: u32 = 1;
+pub const DEVICETYPE_FLOPHD: u32 = 2;
+pub const DEVICETYPE_HARDDISK: u32 = 3;
+pub const DEVICETYPE_HARDFILE: u32 = 4;
 
 pub struct Volume {
-    // struct Device *dev;
-    firstblock: u32,
-    lastblock: u32,
-    rootblock: u32,
+    pub device: Device,
+    pub firstblock: u32,
+    pub lastblock: u32,
+    pub rootblock: u32,
+    pub dos_type: u8,
+    pub boot_code: bool,
+    pub read_only: bool,
+    pub datablocksize: u16,
+    pub blocksize: u16,
+    pub volume_name: Vec<String>,
+    pub mounted: bool,
+    pub dirty: bool,
+    pub bitmap_size: u32,
+    pub bitmap_blocks: u32,
+    pub current_dir_ptr: u32,
+}
 
-    dos_type: u8,
-    boot_code: bool,
-    read_only: bool,
+pub struct Device {
+    pub device_type: u32,
+    pub read_only: bool,
+    pub dirty: bool,
+    pub size: u32,
+    pub num_volumes: u32,
+    pub volume: Vec<Volume>,
+    pub cyls: u32,
+    pub heads: u32,
+    pub secs: u32,
+    pub is_native: bool,
+    pub native_device: Vec<u8>,
+}
 
-    datablocksize: u16,
-    blocksize: u16,
+pub struct Amigafile {
+    pub volume: Vec<Volume>,
+    pub file_header: Vec<Fileheaderblock>,
+    pub current_data: Vec<u8>,
+    pub current_ext: Vec<Fileextblock>,
+    pub num_datablock: u32,
+    pub current_dataptr: u32,
+    pub pos: u32,
+    pub pos_in_datablock: u32,
+    pub pos_in_extblock: u32,
+    pub eof: bool,
+    pub write_mode: bool,
+}
 
-    volume_name: str,
-    mounted: bool,
-    dirty: bool,
+pub struct NativeDevice {
+    // TODO: implement file descriptor
+}
 
-    bitmap_size: u32,
-    bitmap_blocks: u32,
-    
-    current_dir_ptr: u32,
+pub struct NativeFunctions {
+
+    is_native: bool,
+}
+
+impl NativeFunctions {
+    pub fn new() -> NativeFunctions {
+        NativeFunctions {
+            is_native: false,
+        }
+    }
+
+    pub fn init_device(device: &Device, name: &str, ro: bool) {
+
+
+    }
 
 }

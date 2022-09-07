@@ -17,19 +17,15 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
-#![allow(dead_code)]
 
-pub mod adf_blk;
-pub mod adf_disk;
-pub mod adf_err;
-pub mod adf_file;
-pub mod adf_raw;
-pub mod adf_str;
+use crate::adf_blk::*;
+use crate::adf_disk::*;
+use crate::adf_err::*;
+use crate::adf_str::*;
 
-#[cfg(test)]
-mod adf_tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+
+pub fn adf_read_boot_block(vol: &mut Volume, boot: &mut BootBlock) -> i32 {
+
+    
+    RC_OK
 }
