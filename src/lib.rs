@@ -28,8 +28,26 @@ pub mod adf_str;
 
 #[cfg(test)]
 mod adf_tests {
+    use crate::adf_blk::BootBlock;
+
+/// It creates a new `BootBlock` struct, and then asserts that the values of the fields are what we
+/// expect
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_bootblock() {
+        let adf_boot = BootBlock {
+            dostype: [0; 4],
+            checksum: 0,
+            rootblock: 0,
+            data: [0; 500 + 512],
+        };
+        assert_eq!(adf_boot.dostype, [b'D', b'O', b'S', b' ']);
+        assert_eq!(adf_boot.checksum, 0);
+        assert_eq!(adf_boot.rootblock, 0);
+        assert_eq!(adf_boot.data.len(), 1012);
     }
+
+    #[test]
+    fn adf_rootblock() {
+
+    } 
 }

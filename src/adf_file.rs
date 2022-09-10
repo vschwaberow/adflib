@@ -18,6 +18,11 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
+use crate::adf_str::*;
+use std::file::File;
+
 pub fn adf_open_file(vol: &mut Volume, name: &str, mode: &str) -> Option<File> {
+
+    // TODO: implement
 
 }

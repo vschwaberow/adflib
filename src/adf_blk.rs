@@ -18,6 +18,7 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
+use crate::adf_err::*;
 use crate::adf_str::*;
 
 // constant values for the file system
@@ -175,32 +176,26 @@ pub struct Linkblock {
 }
 
 
-fn adf_read_block(vol: &mut Volume, nSect: i32, buf: &mut [u8]) -> i32 {
-    let mut pSect: i32;
-    let mut nFct: &mut NativeFunctions;
-    let mut rc: i32;
+fn adf_read_block(vol: &mut Volume, num_sector: u32, buf: &mut [u8]) -> i32 {
+    let mut prev_sector: u32;
+    let mut native_func: &mut NativeFunctions;
+    let mut return_code: i32;
 
     if !vol.mounted {
         return RC_ERROR;
     }
 
-    pSect = nSect + vol.firstBlock;
+    prev_sector = num_sector + vol.firstblock;
 
-    if adf_environment::use_rw_access {
+    // if adf_environment::use_rw_access {
+    //     // TODO: implement
+    // }
+
+    if prev_sector < vol.firstblock || prev_sector > vol.lastblock {
         // TODO: implement
     }
 
-    if pSect < vol.firstBlock || pSect > vol.lastBlock {
-        // TODO: implement
-    }
-
-    nFct = adf_environment.
-
-
-    if rc != RC_OK {
-        return RC_ERROR;
-    } else {
-        return RC_OK;
-    }
+    RC_OK
 }
+
 
