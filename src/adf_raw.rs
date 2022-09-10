@@ -30,3 +30,15 @@ pub fn adf_read_boot_block(vol: &mut Volume, boot: &mut BootBlock) -> i32 {
 
     RC_OK
 }
+
+pub fn adf_write_boot_block (vol: &mut Volume, boot: &mut BootBlock) -> i32 {
+    let mut buf: [u8; 512];
+    let mut return_code: i32;
+
+    if !vol.mounted {
+        return RC_ERROR;
+    }
+
+
+    RC_OK
+}
