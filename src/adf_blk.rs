@@ -193,24 +193,6 @@ impl BootBlock {
     }
 }
 
-fn adf_read_block(vol: &mut Volume, num_sector: u32, buf: &mut [u8]) -> i32 {
-    let mut prev_sector: u32;
-    let mut native_func: &mut NativeFunctions;
-    let mut return_code: i32;
-
-    if !vol.mounted {
-        return RC_ERROR;
-    }
-
-    prev_sector = num_sector + vol.firstblock;
-
-    // if adf_environment::use_rw_access {
-    //     // TODO: implement
-    // }
-
-    if prev_sector < vol.firstblock || prev_sector > vol.lastblock {
-        // TODO: implement
-    }
-
-    RC_OK
+fn adf_read_block(vol: &mut Volume, num_sector: i32, buf: &mut [u8]) -> i32 {
+    todo!()
 }
