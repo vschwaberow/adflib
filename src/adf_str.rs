@@ -18,7 +18,7 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
-
+use crate::adf_blk::Fileheaderblock;
 
 pub const DEVICETYPE_FLOPDD: u32 = 1;
 pub const DEVICETYPE_FLOPHD: u32 = 2;
@@ -61,7 +61,7 @@ pub struct Amigafile {
     pub volume: Vec<Volume>,
     pub file_header: Vec<Fileheaderblock>,
     pub current_data: Vec<u8>,
-    pub current_ext: Vec<Fileextblock>,
+    //  pub current_ext: Vec<Fileextblock>,
     pub num_datablock: u32,
     pub current_dataptr: u32,
     pub pos: u32,
@@ -78,38 +78,34 @@ pub struct NativeDevice {
 }
 
 pub struct NativeFunctions {
-
     is_native: bool,
 }
 
 impl NativeFunctions {
     pub fn new() -> NativeFunctions {
-        NativeFunctions {
-            is_native: false,
-        }
+        NativeFunctions { is_native: false }
     }
 
     pub fn init_device(device: &Device, name: &str, ro: bool) {
         // TODO: implement
-
+        todo!()
     }
 
     pub fn read_sector(device: &Device, sector: u32, buffer: &mut Vec<u8>) {
         // TODO: implement
+        todo!()
     }
 
     pub fn write_sector(device: &Device, sector: u32, buffer: &mut Vec<u8>) {
         // TODO: implement
+        todo!()
     }
 
     pub fn release_device(device: &Device) {
-        // TODO: implement
+        todo!()
     }
 
-    pub fn is_device_native(device: &Device) -> bool {
-
+    pub fn is_device_native(_device: &Device) -> bool {
+        todo!()
     }
-
-
-
 }

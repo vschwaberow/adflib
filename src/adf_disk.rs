@@ -18,24 +18,24 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
-use crate::adf_err::*;
 use crate::adf_blk::*;
+use crate::adf_err::*;
 use crate::adf_raw::*;
 use crate::adf_str::*;
 
 /// It reads the boot block, copies the boot code into it, and writes it back
-/// 
+///
 /// Arguments:
-/// 
+///
 /// * `vol`: a pointer to a Volume structure
 /// * `code`: The boot code to be written to the disk.
-/// 
+///
 /// Returns:
-/// 
+///
 /// The return code of the function.
 pub fn adf_install_boot_block(vol: &mut Volume, code: &mut [u8; 1024]) -> i32 {
-    let mut i: i32;
-    let mut boot: BootBlock;
+    let mut _i: i32;
+    let mut boot: BootBlock = BootBlock::new();
 
     let device_type = vol.device.device_type;
 
@@ -48,8 +48,9 @@ pub fn adf_install_boot_block(vol: &mut Volume, code: &mut [u8; 1024]) -> i32 {
     }
 
     boot.rootblock = 880;
-    for i in 0..1024-12 {         /* bootcode */
-        boot.data[i] = code[i+12];
+    for i in 0..1024 - 12 {
+        /* bootcode */
+        boot.data[i] = code[i + 12];
     }
 
     if adf_write_boot_block(vol, &mut boot) != RC_OK {
@@ -60,9 +61,3 @@ pub fn adf_install_boot_block(vol: &mut Volume, code: &mut [u8; 1024]) -> i32 {
 
     RC_OK
 }
-
-
-
-
-
-

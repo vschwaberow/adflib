@@ -26,7 +26,7 @@ pub const FSMASK_FFS: u8 = 1;
 pub const FSMASK_INTL: u8 = 2;
 pub const FSMASK_DIRCACHE: u8 = 4;
 
-// constant values for the block type   
+// constant values for the block type
 
 pub const MAXNAMELENGTH: usize = 30;
 pub const MAXCOMMENTLENGTH: usize = 79;
@@ -36,17 +36,24 @@ pub const MAX_DATABLOCK: usize = 72;
 pub const BM_VALID: isize = -1;
 pub const BM_INVALID: isize = 0;
 
-pub fn is_ffs(c: u8) -> bool { (c & FSMASK_FFS) != 0 }
-pub fn is_ofs(c: u8) -> bool { (c & FSMASK_FFS) == 0 }
-pub fn is_intl(c: u8) -> bool { (c & FSMASK_INTL) != 0 }
-pub fn is_dircache(c: u8) -> bool { (c & FSMASK_DIRCACHE) != 0 }
-
+pub fn is_ffs(c: u8) -> bool {
+    (c & FSMASK_FFS) != 0
+}
+pub fn is_ofs(c: u8) -> bool {
+    (c & FSMASK_FFS) == 0
+}
+pub fn is_intl(c: u8) -> bool {
+    (c & FSMASK_INTL) != 0
+}
+pub fn is_dircache(c: u8) -> bool {
+    (c & FSMASK_DIRCACHE) != 0
+}
 
 pub struct BootBlock {
     pub dostype: [u8; 4],
     pub checksum: u32,
     pub rootblock: i32,
-    pub data: [u8; 500+512]
+    pub data: [u8; 500 + 512],
 }
 
 pub struct RootBlock {
@@ -79,30 +86,30 @@ pub struct RootBlock {
 }
 
 pub struct Fileheaderblock {
-    pub amiga_type: i32,		
-    pub headerkey: i32,	
-    pub highseq: i32,	
-    pub datasize: i32,	
+    pub amiga_type: i32,
+    pub headerkey: i32,
+    pub highseq: i32,
+    pub datasize: i32,
     pub firstdata: i32,
     pub checksum: u32,
     pub datablocks: [i32; MAX_DATABLOCK],
     pub r1: i32,
     pub r2: i32,
-    pub access: i32,	
+    pub access: i32,
     pub bytesize: u32,
     pub commlen: u8,
-    pub comment: [u8; MAXCOMMENTLENGTH+1],
+    pub comment: [u8; MAXCOMMENTLENGTH + 1],
     pub days: i32,
     pub mins: i32,
     pub ticks: i32,
     pub namelen: u8,
-    pub filename: [u8; MAXNAMELENGTH+1],
-    pub real: i32,		
-    pub nextlink: i32,	
-    pub nextsamehash: i32,	
-    pub parent: i32,		
+    pub filename: [u8; MAXNAMELENGTH + 1],
+    pub real: i32,
+    pub nextlink: i32,
+    pub nextsamehash: i32,
+    pub parent: i32,
     pub extension: i32,
-    pub sectype: i32,	
+    pub sectype: i32,
 }
 
 pub struct Directoryblock {
@@ -116,13 +123,13 @@ pub struct Directoryblock {
     pub access: i32,
     pub r4: i32,
     pub commlen: u8,
-    pub comment: [u8; MAXCOMMENTLENGTH+1],
-    pub r5: [u8; 91-(MAXCOMMENTLENGTH+1)],
+    pub comment: [u8; MAXCOMMENTLENGTH + 1],
+    pub r5: [u8; 91 - (MAXCOMMENTLENGTH + 1)],
     pub days: i32,
     pub mins: i32,
     pub ticks: i32,
     pub namelen: u8,
-    pub dirname: [u8; MAXNAMELENGTH+1],
+    pub dirname: [u8; MAXNAMELENGTH + 1],
     pub r6: i32,
     pub real: i32,
     pub nextlink: i32,
@@ -130,7 +137,7 @@ pub struct Directoryblock {
     pub nextsamehash: i32,
     pub parent: i32,
     pub extension: i32,
-    pub sectype: i32
+    pub sectype: i32,
 }
 
 pub struct OFSDatablock {
@@ -145,22 +152,22 @@ pub struct OFSDatablock {
 
 pub struct Bitmapblock {
     pub checksum: u32,
-    pub map: [u32; 127]
+    pub map: [u32; 127],
 }
 
 pub struct Bitmapextblock {
     pub bmpages: [i32; 127],
-    pub nextblock: i32
+    pub nextblock: i32,
 }
 
 pub struct Linkblock {
-    pub amiga_type: i32,      
-    pub headerkey: i32, 
+    pub amiga_type: i32,
+    pub headerkey: i32,
     pub r1: [i32; 3],
     pub checksum: u32,
     pub realname: [u8; 64],
     pub r2: [i32; 83],
-    pub days: i32,     
+    pub days: i32,
     pub mins: i32,
     pub ticks: i32,
     pub namelen: u8,
@@ -172,9 +179,19 @@ pub struct Linkblock {
     pub nextsamehash: i32,
     pub parent: i32,
     pub r5: i32,
-    pub sectype: i32,  
+    pub sectype: i32,
 }
 
+impl BootBlock {
+    pub fn new() -> BootBlock {
+        BootBlock {
+            dostype: [0; 4],
+            checksum: 0,
+            rootblock: 0,
+            data: [0; 500 + 512],
+        }
+    }
+}
 
 fn adf_read_block(vol: &mut Volume, num_sector: u32, buf: &mut [u8]) -> i32 {
     let mut prev_sector: u32;
@@ -197,5 +214,3 @@ fn adf_read_block(vol: &mut Volume, num_sector: u32, buf: &mut [u8]) -> i32 {
 
     RC_OK
 }
-
-

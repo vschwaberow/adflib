@@ -23,22 +23,10 @@ use crate::adf_disk::*;
 use crate::adf_err::*;
 use crate::adf_str::*;
 
-
 pub fn adf_read_boot_block(vol: &mut Volume, boot: &mut BootBlock) -> i32 {
-
-    let mut buffer: [u8; 1024]
-
-    RC_OK
+    todo!()
 }
 
-pub fn adf_write_boot_block (vol: &mut Volume, boot: &mut BootBlock) -> i32 {
-    let mut buf: [u8; 512];
-    let mut return_code: i32;
-
-    if !vol.mounted {
-        return RC_ERROR;
-    }
-
-
-    RC_OK
+pub fn adf_write_boot_block(vol: &mut Volume, boot: &mut BootBlock) -> i32 {
+    todo!()
 }
