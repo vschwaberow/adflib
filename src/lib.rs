@@ -18,6 +18,8 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 #![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
 
 pub mod adf_blk;
 pub mod adf_disk;
@@ -30,8 +32,8 @@ pub mod adf_str;
 mod adf_tests {
     use crate::adf_blk::BootBlock;
 
-/// It creates a new `BootBlock` struct, and then asserts that the values of the fields are what we
-/// expect
+    /// It creates a new `BootBlock` struct, and then asserts that the values of the fields are what we
+    /// expect
     #[test]
     fn test_bootblock() {
         let adf_boot = BootBlock {
@@ -47,7 +49,5 @@ mod adf_tests {
     }
 
     #[test]
-    fn adf_rootblock() {
-
-    } 
+    fn adf_rootblock() {}
 }

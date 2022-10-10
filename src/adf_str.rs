@@ -27,8 +27,8 @@ pub const DEVICETYPE_HARDFILE: u32 = 4;
 
 pub struct Volume {
     pub device: Device,
-    pub firstblock: u32,
-    pub lastblock: u32,
+    pub firstblock: i32,
+    pub lastblock: i32,
     pub rootblock: u32,
     pub dos_type: u8,
     pub boot_code: bool,

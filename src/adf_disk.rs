@@ -61,3 +61,27 @@ pub fn adf_install_boot_block(vol: &mut Volume, code: &mut [u8; 1024]) -> i32 {
 
     RC_OK
 }
+
+/// If the number of sectors is greater than or equal to zero and less than or equal to the last block
+/// minus the first block, then return true.
+///
+/// Arguments:
+///
+/// * `volume`: The volume to check against.
+/// * `num_sectors`: The number of sectors to read.
+///
+/// Returns:
+///
+/// A boolean value.
+fn is_sect_num_valid(volume: &Volume, num_sectors: i32) -> bool {
+    return 0 <= num_sectors && num_sectors <= volume.lastblock - volume.firstblock;
+}
+
+/// `unmount` unmounts a volume
+///
+/// Arguments:
+///
+/// * `volume`: The volume to unmount.
+fn unmount(volume: &Volume) {
+    todo!()
+}
