@@ -21,33 +21,4 @@ Author(s): Volker Schwaberow
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-pub mod adf_blk;
 pub mod adf_disk;
-pub mod adf_err;
-pub mod adf_file;
-pub mod adf_raw;
-pub mod adf_str;
-
-#[cfg(test)]
-mod adf_tests {
-    use crate::adf_blk::BootBlock;
-
-    /// It creates a new `BootBlock` struct, and then asserts that the values of the fields are what we
-    /// expect
-    #[test]
-    fn test_bootblock() {
-        let adf_boot = BootBlock {
-            dostype: [0; 4],
-            checksum: 0,
-            rootblock: 0,
-            data: [0; 500 + 512],
-        };
-        assert_eq!(adf_boot.dostype, [b'D', b'O', b'S', b' ']);
-        assert_eq!(adf_boot.checksum, 0);
-        assert_eq!(adf_boot.rootblock, 0);
-        assert_eq!(adf_boot.data.len(), 1012);
-    }
-
-    #[test]
-    fn adf_rootblock() {}
-}

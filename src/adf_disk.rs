@@ -23,44 +23,48 @@ use crate::adf_err::*;
 use crate::adf_raw::*;
 use crate::adf_str::*;
 
-/// It reads the boot block, copies the boot code into it, and writes it back
-///
-/// Arguments:
-///
-/// * `vol`: a pointer to a Volume structure
-/// * `code`: The boot code to be written to the disk.
-///
-/// Returns:
-///
-/// The return code of the function.
-pub fn adf_install_boot_block(vol: &mut Volume, code: &mut [u8; 1024]) -> i32 {
-    let mut _i: i32;
-    let mut boot: BootBlock = BootBlock::new();
+struct Volume {
+    dev: Device,
+    boot_code: bool,
+}
 
-    let device_type = vol.device.device_type;
+struct Device {
+    dev_type: DeviceType,
+}
 
-    if device_type != DEVICETYPE_FLOPDD && device_type != DEVICETYPE_FLOPHD {
-        return RC_ERROR;
+enum DeviceType {
+    FLOPDD,
+    FLOPHD,
+}
+
+struct BootBlock {
+    root_block: u32,
+    data: [u8; 1024-12],
+}
+
+fn install_boot_block(vol: &mut Volume, code: &[u8]) -> Result<(), Error> {
+    if vol.dev.dev_type != DEVICETYPE_FLOPDD && vol.dev.dev_type != DEVICETYPE_FLOPHD {
+        return Err(Error::InvalidDeviceType);
     }
 
-    if adf_read_boot_block(vol, &mut boot) != RC_OK {
-        return RC_ERROR;
-    }
+    let mut boot = match read_boot_block(vol) {
+        Ok(b) => b,
+        Err(e) => return Err(e),
+    };
 
-    boot.rootblock = 880;
-    for i in 0..1024 - 12 {
-        /* bootcode */
-        boot.data[i] = code[i + 12];
-    }
+    boot.root_block = 880;
+    boot.data.copy_from_slice(&code[12..]);
 
-    if adf_write_boot_block(vol, &mut boot) != RC_OK {
-        return RC_ERROR;
+    match write_boot_block(vol, &boot) {
+        Ok(_) => (),
+        Err(e) => return Err(e),
     }
 
     vol.boot_code = true;
 
-    RC_OK
+    Ok(())
 }
+
 
 /// If the number of sectors is greater than or equal to zero and less than or equal to the last block
 /// minus the first block, then return true.
