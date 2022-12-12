@@ -18,10 +18,6 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
-use crate::adf_blk::*;
-use crate::adf_err::*;
-use crate::adf_raw::*;
-use crate::adf_str::*;
 
 struct Volume {
     dev: Device,
