@@ -43,5 +43,22 @@ impl ADF {
         file.write_all(&self.data)?;
         Ok(())
     }
+
+    pub fn read_sector(&self, track: usize, sector: usize) -> &[u8] {
+        let offset = track * ADF_TRACK_SIZE + sector * ADF_SECTOR_SIZE;
+        &self.data[offset..offset + ADF_SECTOR_SIZE]
+    }
+
+    pub fn write_sector(&mut self, track: usize, sector: usize, data: &[u8]) -> Result<()> {
+        if data.len() != ADF_SECTOR_SIZE {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Invalid sector data size",
+            ));
+        }
+        let offset = track * ADF_TRACK_SIZE + sector * ADF_SECTOR_SIZE;
+        self.data[offset..offset + ADF_SECTOR_SIZE].copy_from_slice(data);
+        Ok(())
+    }
 }
 
