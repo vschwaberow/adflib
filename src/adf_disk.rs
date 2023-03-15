@@ -18,70 +18,30 @@ DEALINGS IN THE SOFTWARE.
 Author(s): Volker Schwaberow
 */
 
+use std::fs::File;
+use std::io::{Read, Result, Write};
 
-struct Volume {
-    dev: Device,
-    boot_code: bool,
+const ADF_SECTOR_SIZE: usize = 512;
+const ADF_TRACK_SIZE: usize = 11 * ADF_SECTOR_SIZE;
+const ADF_NUM_TRACKS: usize = 80 * 2;
+
+#[derive(Debug, Clone)]
+pub struct ADF {
+    data: Vec<u8>
 }
 
-struct Device {
-    dev_type: DeviceType,
-}
-
-enum DeviceType {
-    FLOPDD,
-    FLOPHD,
-}
-
-struct BootBlock {
-    root_block: u32,
-    data: [u8; 1024-12],
-}
-
-fn install_boot_block(vol: &mut Volume, code: &[u8]) -> Result<(), Error> {
-    if vol.dev.dev_type != DEVICETYPE_FLOPDD && vol.dev.dev_type != DEVICETYPE_FLOPHD {
-        return Err(Error::InvalidDeviceType);
+impl ADF {
+    pub fn from_file(path: &str) -> Result<ADF> {
+        let mut file = File::open(path)?;
+        let mut data = vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS];
+        file.read_exact(&mut data)?;
+        Ok(ADF { data })
     }
 
-    let mut boot = match read_boot_block(vol) {
-        Ok(b) => b,
-        Err(e) => return Err(e),
-    };
-
-    boot.root_block = 880;
-    boot.data.copy_from_slice(&code[12..]);
-
-    match write_boot_block(vol, &boot) {
-        Ok(_) => (),
-        Err(e) => return Err(e),
+    pub fn write_to_file(&self, path: &str) -> Result<()> {
+        let mut file = File::create(path)?;
+        file.write_all(&self.data)?;
+        Ok(())
     }
-
-    vol.boot_code = true;
-
-    Ok(())
 }
 
-
-/// If the number of sectors is greater than or equal to zero and less than or equal to the last block
-/// minus the first block, then return true.
-///
-/// Arguments:
-///
-/// * `volume`: The volume to check against.
-/// * `num_sectors`: The number of sectors to read.
-///
-/// Returns:
-///
-/// A boolean value.
-fn is_sect_num_valid(volume: &Volume, num_sectors: i32) -> bool {
-    return 0 <= num_sectors && num_sectors <= volume.lastblock - volume.firstblock;
-}
-
-/// `unmount` unmounts a volume
-///
-/// Arguments:
-///
-/// * `volume`: The volume to unmount.
-fn unmount(volume: &Volume) {
-    todo!()
-}
