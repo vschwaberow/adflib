@@ -17,7 +17,7 @@ TBD
 
 ## License 
 
-I decided to use the MIT license for this project. See the [LICENSE] (LICENSE) file for details.
+I decided to use the MIT/APACHE-2 license for this project. See the License files in the root of the project for details.
 
 ## Acknowledgments
 
