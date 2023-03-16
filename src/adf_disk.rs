@@ -60,5 +60,21 @@ impl ADF {
         self.data[offset..offset + ADF_SECTOR_SIZE].copy_from_slice(data);
         Ok(())
     }
-}
 
+    pub fn read_track(&self, track: usize) -> &[u8] {
+        let offset = track * ADF_TRACK_SIZE;
+        &self.data[offset..offset + ADF_TRACK_SIZE]
+    }
+
+    pub fn write_track(&mut self, track: usize, data: &[u8]) -> Result<()> {
+        if data.len() != ADF_TRACK_SIZE {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Invalid track data size",
+            ));
+        }
+        let offset = track * ADF_TRACK_SIZE;
+        self.data[offset..offset + ADF_TRACK_SIZE].copy_from_slice(data);
+        Ok(())
+    }
+}
