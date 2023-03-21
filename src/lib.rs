@@ -21,4 +21,4 @@ Author(s): Volker Schwaberow
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-pub mod adf_disk;
+pub mod disk;
