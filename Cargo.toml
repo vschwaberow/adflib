@@ -11,6 +11,13 @@ keywords = ["lib", "amiga", "filesystem", "rust"]
 categories = ["data-structures"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[profile.release]
+strip = "symbols"
+lto = true
+codegen-units = 1
+opt-level = "z"
+panic = "abort"
+
 
 [dependencies]
 clap = { version = "4.1.8", features = ["derive"] }
