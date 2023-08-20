@@ -34,6 +34,45 @@ pub struct ADF {
 }
 
 impl ADF {
+    /// Copies a file or directory from one disk to another.
+    ///
+    /// # Arguments
+    ///
+    /// * `src_disk` - A mutable reference to the source disk.
+    /// * `dst_disk` - A mutable reference to the destination disk.
+    /// * `src_path` - The path of the source file or directory.
+    /// * `dst_path` - The path of the destination file or directory.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if the file or directory was copied successfully, or an error if the file or directory could not be found or copied.
+    pub fn copy(
+        src_disk: &mut ADF,
+        dst_disk: &mut ADF,
+        src_path: &Path,
+        dst_path: &Path,
+    ) -> Result<()> {
+        let src_file_type = src_disk.get_file_type(src_path)?;
+        if src_file_type == AmigaFileType::File {
+            let mut data = src_disk.read_file(src_path)?;
+            dst_disk.create_file(dst_path)?;
+            dst_disk.write_file(dst_path, &mut data)?;
+        } else if src_file_type == AmigaFileType::Directory {
+            dst_disk.create_directory(dst_path)?;
+            let entries = src_disk.list_directory(src_path)?;
+            for entry in entries {
+                let mut src_entry_path = src_path.to_path_buf();
+                src_entry_path.push(entry.name);
+                let mut dst_entry_path = dst_path.to_path_buf();
+                dst_entry_path.push(entry.name);
+                ADF::copy(src_disk, dst_disk, &src_entry_path, &dst_entry_path)?;
+            }
+        } else {
+            return Err(Error::new(ErrorKind::Other, "Unsupported file type"));
+        }
+        Ok(())
+    }
+
     /// Returns the size of the file at the specified track and sector on the disk.
     ///
     /// # Arguments
