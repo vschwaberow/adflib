@@ -5,6 +5,7 @@
 
 use std::fs::File;
 use std::io::{Read, Result, Write};
+use std::path::Path;
 
 const ADF_SECTOR_SIZE: usize = 512;
 const ADF_TRACK_SIZE: usize = 11 * ADF_SECTOR_SIZE;
@@ -33,6 +34,37 @@ pub struct ADF {
 }
 
 impl ADF {
+
+    /// Reads the contents of a file at the specified path from the disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - A reference to the path of the file to be read.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing a vector of bytes representing the contents of the file if successful,
+    /// or an error if the file could not be found or read.
+    pub fn read_file(&self, path: &Path) -> Result<Vec<u8>> {
+        let (track, sector)  = self.find_file(path)?;
+        let mut data = Vec::new();
+        let mut track_num = track;
+        let mut sector_num = sector;
+        loop {
+            let sector_data = self.read_sector(track_num, sector_num);
+            let next_track = sector_data[0] as usize;
+            let next_sector = sector_data[1] as usize;
+            let data_bytes = &sector_data[2..];
+            data.extend_from_slice(data_bytes);
+            if next_track == 0 && next_sector == 0 {
+                break;
+            }
+            track_num = next_track;
+            sector_num = next_sector;
+        }
+        Ok(data)
+    }
+
     /// Reads a directory from the specified track and sector and returns a vector of directory entries.
     ///
     /// # Arguments
