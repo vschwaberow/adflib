@@ -38,7 +38,11 @@ impl ADF {
 
     pub fn read_sector(&self, track: usize, sector: usize) -> &[u8] {
         let offset = track * ADF_TRACK_SIZE + sector * ADF_SECTOR_SIZE;
-        &self.data[offset..offset + ADF_SECTOR_SIZE]
+        if track == 0 && sector == 0 {
+            &self.bootblock
+        } else {
+            &self.data[offset..offset + ADF_SECTOR_SIZE]
+        }
     }
 
     pub fn write_sector(&mut self, track: usize, sector: usize, data: &[u8]) -> Result<()> {
