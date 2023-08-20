@@ -34,6 +34,68 @@ pub struct ADF {
 }
 
 impl ADF {
+    /// Returns the size of the file at the specified track and sector on the disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `track` - The track number of the file.
+    /// * `sector` - The sector number of the file.
+    ///
+    /// # Returns
+    ///
+    /// Returns the size of the file in bytes if successful, or an error if the file could not be found or read.
+    pub fn get_file_size(&self, track: usize, sector: usize) -> Result<usize> {
+        let mut track_num = track;
+        let mut sector_num = sector;
+        let mut size = 0;
+        loop {
+            let sector_data = self.read_sector(track_num, sector_num);
+            let next_track = sector_data[0] as usize;
+            let next_sector = sector_data[1] as usize;
+            let sector_size = sector_data[2] as usize * 512;
+            size += sector_size;
+            if next_track == 0 && next_sector == 0 {
+                break;
+            }
+            track_num = next_track;
+            sector_num = next_sector;
+        }
+        Ok(size)
+    }
+
+    /// Reads the contents of a file at the specified path from the disk and returns a mutable reference to the data.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - A reference to the path of the file to be read.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing a mutable reference to a vector of bytes representing the contents of the file if successful,
+    /// or an error if the file could not be found or read.
+    pub fn read_file_mut(&mut self, path: &Path) -> Result<&mut Vec<u8>> {
+        let (track, sector) = self.find_file(path)?;
+        let mut track_num = track;
+        let mut sector_num = sector;
+        let mut data = Vec::new();
+        loop {
+            let sector_data = self.read_sector(track_num, sector_num);
+            let next_track = sector_data[0] as usize;
+            let next_sector = sector_data[1] as usize;
+            let data_bytes = &sector_data[2..];
+            data.extend_from_slice(data_bytes);
+            if next_track == 0 && next_sector == 0 {
+                break;
+            }
+            track_num = next_track;
+            sector_num = next_sector;
+        }
+        let file_size = self.get_file_size(track, sector)?;
+        if data.len() != file_size {
+            return Err(Error::FileReadError);
+        }
+        Ok(data)
+    }
 
     /// Reads the contents of a file at the specified path from the disk.
     ///
@@ -46,7 +108,7 @@ impl ADF {
     /// Returns a `Result` containing a vector of bytes representing the contents of the file if successful,
     /// or an error if the file could not be found or read.
     pub fn read_file(&self, path: &Path) -> Result<Vec<u8>> {
-        let (track, sector)  = self.find_file(path)?;
+        let (track, sector) = self.find_file(path)?;
         let mut data = Vec::new();
         let mut track_num = track;
         let mut sector_num = sector;
@@ -63,6 +125,146 @@ impl ADF {
             sector_num = next_sector;
         }
         Ok(data)
+    }
+
+    /// Writes the given data to the file at the specified path on the disk.
+    ///
+    /// If the file does not exist, it will be created. If the file already exists, its contents will be
+    /// replaced with the new data.
+    ///
+    /// Returns an error if the file could not be found or if there was an error writing to the disk.
+    pub fn write_file(&mut self, path: &Path, data: &[u8]) -> Result<()> {
+        let (track, sector) = self.find_file(path)?;
+        let mut track_num = track;
+        let mut sector_num = sector;
+        let mut data_offset = 0;
+
+        loop {
+            let sector_data = self.read_sector(track_num, sector_num);
+            let next_track = sector_data[0] as usize;
+            let next_sector = sector_data[1] as usize;
+            let mut data_bytes = &mut sector_data[2..];
+            let data_len = data.len() - data_offset;
+            let sector_len = ADF_SECTOR_SIZE - 2;
+            let copy_len = std::cmp::min(data_len, sector_len);
+
+            data_bytes[..copy_len].copy_from_slice(&data[data_offset..data_offset + copy_len]);
+            data_offset += copy_len;
+            if data_offset >= data.len() {
+                sector_data[0] = 0;
+                sector_data[1] = 0;
+                break;
+            }
+            if next_track == 0 && next_sector == 0 {
+                let (new_track, new_sector) = self.allocate_sector(track_num, sector_num)?;
+                sector_data[0] = new_track as u8;
+                sector_data[1] = new_sector as u8;
+                track_num = new_track;
+                sector_num = new_sector;
+            } else {
+                track_num = next_track;
+                sector_num = next_sector;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn allocate_sector(
+        &mut self,
+        prev_track: usize,
+        prev_sector: usize,
+    ) -> Result<(usize, usize)> {
+        let mut track_num = prev_track;
+        let mut sector_num = prev_sector;
+        loop {
+            let sector_data = self.read_sector_mut(track_num, sector_num);
+            let next_track = sector_data[0] as usize;
+            let next_sector = sector_data[1] as usize;
+            if next_track == 0 && next_sector == 0 {
+                let (new_track, new_sector) = self.find_free_sector()?;
+                sector_data[0] = new_track as u8;
+                sector_data[1] = new_sector as u8;
+                self.clear_sector(new_track, new_sector)?;
+                return Ok((new_track, new_sector));
+            }
+            track_num = next_track;
+            sector_num = next_sector;
+        }
+    }
+
+    fn clear_sector(&mut self, track_num: usize, sector_num: usize) -> Result<()> {
+        let sector_data = self.read_sector_mut(track_num, sector_num);
+        sector_data[0] = 0;
+        sector_data[1] = 0;
+        sector_data[2..].fill(0);
+        Ok(())
+    }
+
+    fn find_free_sector(&self) -> Result<(usize, usize)> {
+        for track_num in 0..ADF_NUM_TRACKS {
+            for sector_num in 0..11 {
+                let sector_data = self.read_sector(track_num, sector_num)?;
+                if sector_data[0] == 0 && sector_data[1] == 0 {
+                    return Ok((track_num, sector_num));
+                }
+            }
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No free sectors available",
+        ))
+    }
+
+    /// Finds a file in the disk image by its path.
+    ///
+    /// # Arguments
+    ///
+    /// * `self` - The `Disk` instance.
+    /// * `path` - The path of the file to find.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a tuple with the track and sector numbers of the file's location if found,
+    /// or an `std::io::Error` if the file is not found or the path is invalid.
+    pub fn find_file(&self, path: &Path) -> Result<(usize, usize)> {
+        let mut track_num = 0;
+        let mut sector_num = 0;
+
+        for component in path.components() {
+            let name = match component {
+                std::path::Component::Normal(name) => name,
+                _ => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Invalid file path",
+                    ))
+                }
+            };
+            let entries = self.read_directory(track_num, sector_num)?;
+            let entry = entries
+                .iter()
+                .find(|entry| entry.filename == name.to_string_lossy().to_string());
+            match entry {
+                Some(entry) => {
+                    if entry.file_type != AmigaFileType::Directory {
+                        Ok((entry.track as usize, entry.sector as usize))
+                    }
+                    track_num = entry.track as usize;
+                    sector_num = entry.sector as usize;
+                }
+                None => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "File not found",
+                    ))
+                }
+            }
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid file path",
+        ))
     }
 
     /// Reads a directory from the specified track and sector and returns a vector of directory entries.
