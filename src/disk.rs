@@ -53,7 +53,11 @@ impl ADF {
             ));
         }
         let offset = track * ADF_TRACK_SIZE + sector * ADF_SECTOR_SIZE;
-        self.data[offset..offset + ADF_SECTOR_SIZE].copy_from_slice(data);
+        if track == 0 && sector == 0 {
+            self.bootblock.copy_from_slice(data);
+        } else {
+            self.data[offset..offset + ADF_SECTOR_SIZE].copy_from_slice(data);
+        }
         Ok(())
     }
 
