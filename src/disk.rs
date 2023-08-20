@@ -9,10 +9,12 @@ use std::io::{Read, Result, Write};
 const ADF_SECTOR_SIZE: usize = 512;
 const ADF_TRACK_SIZE: usize = 11 * ADF_SECTOR_SIZE;
 const ADF_NUM_TRACKS: usize = 80 * 2;
+const BOOTBLOCK_SIZE: usize = 1024;
 
 #[derive(Debug, Clone)]
 pub struct ADF {
-    data: Vec<u8>
+    bootblock: Vec<u8>,
+    data: Vec<u8>,
 }
 
 impl ADF {
@@ -20,11 +22,16 @@ impl ADF {
         let mut file = File::open(path)?;
         let mut data = vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS];
         file.read_exact(&mut data)?;
-        Ok(ADF { data })
+
+        let mut bootblock = vec![0; BOOTBLOCK_SIZE];
+        file.read_exact(&mut bootblock)?;
+
+        Ok(ADF { bootblock, data })
     }
 
     pub fn write_to_file(&self, path: &str) -> Result<()> {
         let mut file = File::create(path)?;
+        file.write_all(&self.bootblock)?;
         file.write_all(&self.data)?;
         Ok(())
     }
