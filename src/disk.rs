@@ -60,6 +60,20 @@ impl AmigaFile {
     pub fn is_some(&self) -> bool {
         !self.data.is_empty()
     }
+
+    /// Returns the size of the file in bytes.
+    pub fn file_size(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Sets the size of the file and resizes the data buffer accordingly.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` - The new size of the file.
+    pub fn set_file_size(&mut self, size: usize) {
+        self.data.resize(size, 0);
+    }
 }
 
 impl ADF {
