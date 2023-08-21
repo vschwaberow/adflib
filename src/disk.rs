@@ -3,6 +3,7 @@
 // Copyright (c) 2023
 // - Volker Schwaberow <volker@schwaberow.de>
 
+use std::error::Error;
 use std::fs::File;
 use std::io::{Read, Result, Write};
 use std::path::Path;
@@ -11,6 +12,22 @@ const ADF_SECTOR_SIZE: usize = 512;
 const ADF_TRACK_SIZE: usize = 11 * ADF_SECTOR_SIZE;
 const ADF_NUM_TRACKS: usize = 80 * 2;
 const BOOTBLOCK_SIZE: usize = 1024;
+
+#[derive(Debug)]
+pub struct AmigaFile {
+    pub header: AmigaFileHeader,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct AmigaFileHeader {
+    pub track: u16,
+    pub sector: u16,
+    pub file_type: u16,
+    pub protection_bits: u16,
+    pub file_size: u32,
+    pub filename: String,
+}
 
 #[derive(Debug)]
 pub struct DirectoryEntry {
@@ -33,7 +50,42 @@ pub struct ADF {
     data: Vec<u8>,
 }
 
+impl AmigaFile {
+    /// Creates a new `AmigaFile` instance with the given `header` and `data`.
+    pub fn new(header: AmigaFileHeader, data: Vec<u8>) -> AmigaFile {
+        AmigaFile { header, data }
+    }
+
+    /// Returns `true` if the `data` field is not empty, and `false` otherwise.
+    pub fn is_some(&self) -> bool {
+        !self.data.is_empty()
+    }
+}
+
 impl ADF {
+    /// Returns an `AmigaFile` instance for the file at the given path.
+    ///
+    /// # Arguments
+    ///
+    /// * `self` - The `Disk` instance.
+    /// * `path` - The path of the file to get.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing an `AmigaFile` instance if the file is found and its contents and header were read successfully,
+    /// or an `std::io::Error` if the file is not found or the path is invalid.
+    pub fn get_file(&self, path: &Path) -> Result<AmigaFile> {
+        let file = self.find_file(path)?;
+        let header = AmigaFileHeader {
+            file_type: file.header.file_type,
+            file_size: file.header.file_size,
+            track: file.header.track,
+            sector: file.header.sector,
+            protection_bits: file.header.protection_bits,
+            filename: path.file_name().unwrap().to_string_lossy().to_string(),
+        };
+        Ok(AmigaFile::new(header, file.data))
+    }
     /// Gets the file type of a file or directory on the disk.
     ///
     /// # Arguments
@@ -46,7 +98,6 @@ impl ADF {
     pub fn get_file_type(&self, path: &Path) -> Result<AmigaFileType> {
         let file = self.find_file(path)?;
         if file.is_some() {
-            let file = file.unwrap();
             if file.header.file_type == 0x0000 {
                 Ok(AmigaFileType::File)
             } else if file.header.file_type == 0x0002 {
@@ -55,7 +106,10 @@ impl ADF {
                 Ok(AmigaFileType::Other)
             }
         } else {
-            Err(Error::new(ErrorKind::NotFound, "File not found"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "File not found",
+            ))
         }
     }
 
@@ -156,7 +210,10 @@ impl ADF {
         }
         let file_size = self.get_file_size(track, sector)?;
         if data.len() != file_size {
-            return Err(Error::FileReadError);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "File not found",
+            ));
         }
         Ok(data)
     }
@@ -289,9 +346,9 @@ impl ADF {
     ///
     /// # Returns
     ///
-    /// A `Result` containing a tuple with the track and sector numbers of the file's location if found,
+    /// A `Result` containing an `AmigaFile` struct if the file is found and its contents and header were read successfully,
     /// or an `std::io::Error` if the file is not found or the path is invalid.
-    pub fn find_file(&self, path: &Path) -> Result<(usize, usize)> {
+    pub fn find_file(&self, path: &Path) -> Result<AmigaFile> {
         let mut track_num = 0;
         let mut sector_num = 0;
 
@@ -312,7 +369,18 @@ impl ADF {
             match entry {
                 Some(entry) => {
                     if entry.file_type != AmigaFileType::Directory {
-                        Ok((entry.track as usize, entry.sector as usize))
+                        let mut data = vec![0; entry.file_size as usize];
+                        self.read_file_data(
+                            entry.track as usize,
+                            entry.sector as usize,
+                            &mut data,
+                        )?;
+                        let header = AmigaFileHeader {
+                            file_type: entry.file_type as u16,
+                            file_size: entry.file_size as u32,
+                            // Add more fields as needed
+                        };
+                        return Ok(AmigaFile { header, data });
                     }
                     track_num = entry.track as usize;
                     sector_num = entry.sector as usize;
