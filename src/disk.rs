@@ -34,6 +34,31 @@ pub struct ADF {
 }
 
 impl ADF {
+    /// Gets the file type of a file or directory on the disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path of the file or directory.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(AmigaFileType)` if the file or directory was found and its type was determined, or an error if the file or directory could not be found or its type could not be determined.
+    pub fn get_file_type(&self, path: &Path) -> Result<AmigaFileType> {
+        let file = self.find_file(path)?;
+        if file.is_some() {
+            let file = file.unwrap();
+            if file.header.file_type == 0x0000 {
+                Ok(AmigaFileType::File)
+            } else if file.header.file_type == 0x0002 {
+                Ok(AmigaFileType::Directory)
+            } else {
+                Ok(AmigaFileType::Other)
+            }
+        } else {
+            Err(Error::new(ErrorKind::NotFound, "File not found"))
+        }
+    }
+
     /// Copies a file or directory from one disk to another.
     ///
     /// # Arguments
