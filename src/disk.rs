@@ -3,6 +3,7 @@
 // Copyright (c) 2023
 // - Volker Schwaberow <volker@schwaberow.de>
 
+use std::collections::hash_map::Entry;
 use std::error::Error;
 use std::fs::File;
 use std::io::{Read, Result, Write};
@@ -117,7 +118,7 @@ impl ADF {
             } else if file.header.file_type == 0x0002 {
                 Ok(AmigaFileType::Directory)
             } else {
-                Ok(AmigaFileType::Other)
+                Ok(AmigaFileType::Other(0))
             }
         } else {
             Err(std::io::Error::new(
@@ -146,13 +147,13 @@ impl ADF {
         dst_path: &Path,
     ) -> Result<()> {
         let src_file_type = src_disk.get_file_type(src_path)?;
-        if src_file_type == AmigaFileType::File {
+        if let AmigaFileType::File = src_file_type {
             let mut data = src_disk.read_file(src_path)?;
             dst_disk.create_file(dst_path)?;
             dst_disk.write_file(dst_path, &mut data)?;
-        } else if src_file_type == AmigaFileType::Directory {
+        } else if let AmigaFileType::Directory = src_file_type {
             dst_disk.create_directory(dst_path)?;
-            let entries = src_disk.list_directory(src_path)?;
+            let entries: Vec<Entry<_, _>> = src_disk.list_directory(src_path)?;
             for entry in entries {
                 let mut src_entry_path = src_path.to_path_buf();
                 src_entry_path.push(entry.name);
@@ -597,5 +598,17 @@ impl ADF {
         let offset = track * ADF_TRACK_SIZE;
         self.data[offset..offset + ADF_TRACK_SIZE].copy_from_slice(data);
         Ok(())
+    }
+
+    fn create_file(&self, dst_path: &Path) -> Result<()> {
+        todo!()
+    }
+
+    fn create_directory(&self, dst_path: &Path) -> Result<()> {
+        todo!()
+    }
+
+    fn list_directory(&self, src_path: &Path) -> Result<()> {
+        todo!()
     }
 }
