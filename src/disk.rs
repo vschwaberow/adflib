@@ -6,7 +6,7 @@
 use std::collections::hash_map::Entry;
 use std::error::Error;
 use std::fs::File;
-use std::io::{Read, Result, Write};
+use std::io::{ErrorKind, Read, Result, Write};
 use std::path::Path;
 
 const ADF_SECTOR_SIZE: usize = 512;
@@ -153,16 +153,17 @@ impl ADF {
             dst_disk.write_file(dst_path, &mut data)?;
         } else if let AmigaFileType::Directory = src_file_type {
             dst_disk.create_directory(dst_path)?;
-            let entries: Vec<Entry<_, _>> = src_disk.list_directory(src_path)?;
-            for entry in entries {
-                let mut src_entry_path = src_path.to_path_buf();
-                src_entry_path.push(entry.name);
-                let mut dst_entry_path = dst_path.to_path_buf();
-                dst_entry_path.push(entry.name);
-                ADF::copy(src_disk, dst_disk, &src_entry_path, &dst_entry_path)?;
-            }
+            // let entries: Vec<Entry<_, _>> = src_disk.list_directory(src_path);
+            // for entry in entries {
+            //     let mut src_entry_path = src_path.to_path_buf();
+            //     src_entry_path.push(entry.name);
+            //     let mut dst_entry_path = dst_path.to_path_buf();
+            //     dst_entry_path.push(entry.name);
+            //     ADF::copy(src_disk, dst_disk, &src_entry_path, &dst_entry_path)?;
+            // }
+            Ok(())
         } else {
-            return Err(Error::new(ErrorKind::Other, "Unsupported file type"));
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Unsupported file type"));
         }
         Ok(())
     }
