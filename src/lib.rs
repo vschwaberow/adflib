@@ -7,4 +7,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
+#[cfg(test)]
+mod tests;
+
 pub mod disk;

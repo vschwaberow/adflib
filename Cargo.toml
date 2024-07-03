@@ -1,6 +1,6 @@
 [package]
 name = "adflib"
-version = "0.0.3"
+version = "0.1.0"
 edition = "2021"
 license = "MIT/Apache-2.0"
 authors = ["Volker Schwaberow <volker@schwaberow.de>"]
@@ -21,3 +21,4 @@ panic = "abort"
 
 [dependencies]
 clap = { version = "4.1.8", features = ["derive"] }
+zip = "2.1.3"
