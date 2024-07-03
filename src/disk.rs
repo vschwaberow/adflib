@@ -5,8 +5,9 @@
 
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{self, Error, ErrorKind, Read, Result, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
+use zip::ZipArchive;
 
 pub const ADF_SECTOR_SIZE: usize = 512;
 pub const ADF_TRACK_SIZE: usize = 11 * ADF_SECTOR_SIZE;
@@ -33,6 +34,28 @@ pub struct FileInfo {
     pub creation_date: SystemTime,
 }
 
+pub fn load_adf_from_zip(zip_data: &[u8], adf_filename: &str) -> io::Result<ADF> {
+    let reader = std::io::Cursor::new(zip_data);
+    let mut archive =
+        ZipArchive::new(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        if file.name() == adf_filename {
+            let mut adf_data = Vec::new();
+            file.read_to_end(&mut adf_data)?;
+            return ADF::from_bytes(&adf_data);
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        "ADF file not found in ZIP archive",
+    ))
+}
+
 impl ADF {
     pub fn format(&mut self, disk_type: DiskType, disk_name: &str) -> Result<()> {
         self.data.fill(0);
@@ -40,6 +63,22 @@ impl ADF {
         self.write_root_block(disk_type, disk_name)?;
         self.write_bitmap_blocks()?;
         Ok(())
+    }
+
+    pub fn from_bytes(data: &[u8]) -> io::Result<Self> {
+        if data.len() != ADF_TRACK_SIZE * ADF_NUM_TRACKS {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Invalid ADF size: expected {} bytes, got {} bytes",
+                    ADF_TRACK_SIZE * ADF_NUM_TRACKS,
+                    data.len()
+                ),
+            ));
+        }
+        Ok(ADF {
+            data: data.to_vec(),
+        })
     }
 
     pub fn from_file(path: &str) -> Result<ADF> {
