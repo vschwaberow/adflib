@@ -11,3 +11,4 @@
 mod tests;
 
 pub mod disk;
+pub mod hunk;
