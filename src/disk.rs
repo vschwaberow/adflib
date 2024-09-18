@@ -376,96 +376,41 @@ impl ADF {
 
         Ok(())
     }
-    pub fn information(&self) -> Result<String> {
-        let mut info = String::new();
-
-        let boot_block = self.read_sector(0);
-        let dos_type = match &boot_block[0..3] {
-            b"DOS" => {
-                let fs_flag = boot_block[3];
-                match fs_flag {
-                    0 => "OFS (Old File System)",
-                    1 => "FFS (Fast File System)",
-                    _ => "Unknown",
-                }
-            }
-            _ => "Not a DOS disk",
-        };
-
-        info.push_str(&format!("Filesystem: {}\n", dos_type));
-
+    pub fn information(&self) -> io::Result<String> {
         let root_block = self.read_sector(ROOT_BLOCK);
+        let disk_name = self.read_disk_name()?;
+        let creation_date = u32::from_be_bytes([root_block[16], root_block[17], root_block[18], root_block[19]]);
+        let filesystem = if root_block[3] & 1 == 1 { "FFS (Fast File System)" } else { "OFS (Old File System)" };
 
-        let name_len = root_block[ADF_SECTOR_SIZE - 80] as usize;
-        let name = String::from_utf8_lossy(
-            &root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len],
+        let info = format!(
+            "ADF Information\n\n\
+             General:\n\
+             Filesystem:      {}\n\
+             Disk Name:       {}\n\
+             Creation Date:   {}\n\n\
+             Disk Geometry:\n\
+             Disk Size:       {} bytes\n\
+             Heads:           {}\n\
+             Tracks:          {}\n\
+             Sectors/Track:   {}\n\
+             Bytes/Sector:    {}\n\n\
+             Filesystem Details:\n\
+             Hash Table Size: {}\n\
+             Reserved Blocks:\n\
+               First:         {}\n\
+               Last:          {}",
+            filesystem,
+            disk_name,
+            creation_date,
+            ADF_TRACK_SIZE * ADF_NUM_TRACKS,
+            2,
+            80,
+            11,
+            512,
+            u32::from_be_bytes([root_block[12], root_block[13], root_block[14], root_block[15]]),
+            u32::from_be_bytes([root_block[128], root_block[129], root_block[130], root_block[131]]),
+            u32::from_be_bytes([root_block[132], root_block[133], root_block[134], root_block[135]])
         );
-        info.push_str(&format!("Disk Name: {}\n", name));
-
-        // Creation date
-        let days = u32::from_be_bytes([
-            root_block[ADF_SECTOR_SIZE - 92],
-            root_block[ADF_SECTOR_SIZE - 91],
-            root_block[ADF_SECTOR_SIZE - 90],
-            root_block[ADF_SECTOR_SIZE - 89],
-        ]);
-        let mins = u32::from_be_bytes([
-            root_block[ADF_SECTOR_SIZE - 88],
-            root_block[ADF_SECTOR_SIZE - 87],
-            root_block[ADF_SECTOR_SIZE - 86],
-            root_block[ADF_SECTOR_SIZE - 85],
-        ]);
-        let ticks = u32::from_be_bytes([
-            root_block[ADF_SECTOR_SIZE - 84],
-            root_block[ADF_SECTOR_SIZE - 83],
-            root_block[ADF_SECTOR_SIZE - 82],
-            root_block[ADF_SECTOR_SIZE - 81],
-        ]);
-
-        let creation_date = SystemTime::UNIX_EPOCH
-            + std::time::Duration::from_secs(
-                (days as u64 * 86400) + (mins as u64 * 60) + (ticks as u64 / 50),
-            );
-        info.push_str(&format!(
-            "Creation Date: {}\n",
-            creation_date.duration_since(UNIX_EPOCH).unwrap().as_secs()
-        ));
-
-        // Disk geometry
-        info.push_str(&format!("Disk Size: {} bytes\n", self.data.len()));
-        info.push_str(&format!("Heads: 2\n"));
-        info.push_str(&format!("Tracks: {}\n", ADF_NUM_TRACKS / 2));
-        info.push_str(&format!(
-            "Sectors per Track: {}\n",
-            ADF_TRACK_SIZE / ADF_SECTOR_SIZE
-        ));
-        info.push_str(&format!("Bytes per Sector: {}\n", ADF_SECTOR_SIZE));
-
-        let hash_size = u32::from_be_bytes([0, 0, root_block[12], root_block[13]]);
-        info.push_str(&format!("Hash Table Size: {}\n", hash_size));
-
-        info.push_str("Reserved Blocks:\n");
-        info.push_str(&format!("  First: {}\n", 0)); // Boot block starts at sector 0
-        info.push_str(&format!("  Last: {}\n", ROOT_BLOCK)); // Root block
-
-        if dos_type.starts_with("FFS") {
-            let bitmap_flag = root_block[ADF_SECTOR_SIZE - 200];
-            info.push_str(&format!("Bitmap Flag: 0x{:02X}\n", bitmap_flag));
-
-            info.push_str("Bitmap Blocks: ");
-            for i in 0..25 {
-                let block_num = u32::from_be_bytes([
-                    root_block[ADF_SECTOR_SIZE - 196 + i * 4],
-                    root_block[ADF_SECTOR_SIZE - 195 + i * 4],
-                    root_block[ADF_SECTOR_SIZE - 194 + i * 4],
-                    root_block[ADF_SECTOR_SIZE - 193 + i * 4],
-                ]);
-                if block_num != 0 {
-                    info.push_str(&format!("{} ", block_num));
-                }
-            }
-            info.push('\n');
-        }
 
         Ok(info)
     }
@@ -480,5 +425,12 @@ impl ADF {
         }
 
         Ok(output)
+    }
+
+    fn read_disk_name(&self) -> io::Result<String> {
+        let root_block = self.read_sector(ROOT_BLOCK);
+        let name_len = root_block[ADF_SECTOR_SIZE - 80] as usize;
+        let name = String::from_utf8_lossy(&root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len]).to_string();
+        Ok(name)
     }
 }

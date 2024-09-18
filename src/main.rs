@@ -7,8 +7,6 @@ use adflib::disk::{DiskType, ADF, ADF_NUM_TRACKS, ADF_TRACK_SIZE};
 use clap::{Arg, Command};
 use std::fs::File;
 use std::io::Write;
-use std::fs;
-use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmd = Command::new("adflibtesttool")
