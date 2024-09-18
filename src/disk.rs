@@ -64,6 +64,64 @@ impl ADF {
         self.write_bitmap_blocks()?;
         Ok(())
     }
+    pub fn extract_file(&self, file_name: &str) -> io::Result<Vec<u8>> {
+        let root_files = self.list_root_directory()?;
+        
+        for file_info in root_files {
+            if file_info.name == file_name {
+                if file_info.is_dir {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Cannot extract a directory",
+                    ));
+                }
+                
+                let file_header_block = self.find_file_header_block(ROOT_BLOCK, file_name)?;
+                println!("File: {} (Size: {} bytes)", file_name, file_info.size);
+                println!("Header block: sector {}", file_header_block);
+                
+                let contents = self.read_file_contents(file_header_block)?;
+                
+                // Basic file type detection
+                if contents.iter().all(|&b| b.is_ascii_graphic() || b.is_ascii_whitespace()) {
+                    println!("Content (ASCII text):\n{}", String::from_utf8_lossy(&contents));
+                } else {
+                    println!("Content: Binary data ({} bytes)", contents.len());
+                }
+                
+                return Ok(contents);
+            }
+        }
+        
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("File '{}' not found", file_name),
+        ))
+    }
+
+    fn find_file_header_block(&self, dir_block: usize, file_name: &str) -> io::Result<usize> {
+        let block_data = self.read_sector(dir_block);
+        
+        for i in (24..=51).rev() {
+            let sector = u32::from_be_bytes([
+                block_data[i * 4],
+                block_data[i * 4 + 1],
+                block_data[i * 4 + 2],
+                block_data[i * 4 + 3],
+            ]);
+            if sector != 0 {
+                let file_info = self.read_file_header(sector as usize)?;
+                if file_info.name == file_name {
+                    return Ok(sector as usize);
+                }
+            }
+        }
+        
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("File header block for '{}' not found", file_name),
+        ))
+    }
 
     pub fn from_bytes(data: &[u8]) -> io::Result<Self> {
         if data.len() != ADF_TRACK_SIZE * ADF_NUM_TRACKS {
@@ -189,37 +247,58 @@ impl ADF {
         })
     }
 
-    pub fn read_file_contents(&self, block: usize) -> Result<Vec<u8>> {
+    pub fn read_file_contents(&self, block: usize) -> io::Result<Vec<u8>> {
         let block_data = self.read_sector(block);
 
-        if block_data[0] != 2 {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                "Not a file header block",
-            ));
+        match block_data[0] {
+            2 => {
+                let file_size = u32::from_be_bytes([block_data[4], block_data[5], block_data[6], block_data[7]]) as usize;
+                let mut contents = Vec::with_capacity(file_size);
+
+                let mut current_block = u32::from_be_bytes([
+                    block_data[16],
+                    block_data[17],
+                    block_data[18],
+                    block_data[19],
+                ]) as usize;
+
+                while current_block != 0 && contents.len() < file_size {
+                    let data_block = self.read_sector(current_block);
+                    let data_size = std::cmp::min(512 - 24, file_size - contents.len());
+                    contents.extend_from_slice(&data_block[24..24 + data_size]);
+                    current_block = u32::from_be_bytes([data_block[0], data_block[1], data_block[2], data_block[3]]) as usize;
+                }
+
+                if contents.len() != file_size {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        format!("File size mismatch. Expected: {}, Read: {}", file_size, contents.len()),
+                    ));
+                }
+
+                Ok(contents)
+            },
+            0 => {
+                // Handle type 0 blocks (possibly direct data blocks)
+                let file_size = u32::from_be_bytes([block_data[4], block_data[5], block_data[6], block_data[7]]) as usize;
+                let mut contents = Vec::with_capacity(file_size);
+                contents.extend_from_slice(&block_data[24..]);
+
+                let mut current_block = u32::from_be_bytes([block_data[16], block_data[17], block_data[18], block_data[19]]) as usize;
+                while current_block != 0 && contents.len() < file_size {
+                    let data_block = self.read_sector(current_block);
+                    let data_size = std::cmp::min(512, file_size - contents.len());
+                    contents.extend_from_slice(&data_block[..data_size]);
+                    current_block = u32::from_be_bytes([data_block[0], data_block[1], data_block[2], data_block[3]]) as usize;
+                }
+
+                Ok(contents)
+            },
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Unexpected block type: {}", block_data[0]),
+            )),
         }
-
-        let file_size =
-            u32::from_be_bytes([block_data[4], block_data[5], block_data[6], block_data[7]])
-                as usize;
-        let mut contents = Vec::with_capacity(file_size);
-
-        let mut current_block = u32::from_be_bytes([
-            block_data[16],
-            block_data[17],
-            block_data[18],
-            block_data[19],
-        ]) as usize;
-        while current_block != 0 {
-            let data_block = self.read_sector(current_block);
-            let data_size = std::cmp::min(512 - 24, file_size - contents.len());
-            contents.extend_from_slice(&data_block[24..24 + data_size]);
-            current_block =
-                u32::from_be_bytes([data_block[0], data_block[1], data_block[2], data_block[3]])
-                    as usize;
-        }
-
-        Ok(contents)
     }
 
     fn write_boot_block(&mut self, disk_type: DiskType) -> Result<()> {

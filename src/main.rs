@@ -7,6 +7,8 @@ use adflib::disk::{DiskType, ADF, ADF_NUM_TRACKS, ADF_TRACK_SIZE};
 use clap::{Arg, Command};
 use std::fs::File;
 use std::io::Write;
+use std::fs;
+use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmd = Command::new("adflibtesttool")
@@ -35,9 +37,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .help("The ADF file to read from"),
                 )
                 .arg(
-                    Arg::new("FILE_PATH")
+                    Arg::new("FILE_NAME")
                         .required(true)
-                        .help("The path of the file to extract within the ADF"),
+                        .help("The name of the file to extract within the ADF"),
                 )
                 .arg(
                     Arg::new("OUTPUT")
@@ -104,23 +106,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(880);
 
             let files = adf.list_directory(directory)?;
-            for file in files {
-                println!(
-                    "{} {} {} bytes",
-                    if file.is_dir { "DIR" } else { "FILE" },
-                    file.name,
-                    file.size
-                );
+            println!("Directory of {}", file_path);
+            println!("Name                 Size    Flags");
+            println!("----                 ----    -----");
+            for file in &files {
+                let flags = if file.is_dir { "  d" } else { "---" };
+                println!("{:<20} {:>5}  {}", file.name, file.size, flags);
             }
+            println!("{} files", files.len());
         }
         Some(("extract", sub_matches)) => {
             let adf_path = sub_matches.get_one::<String>("ADF_FILE").unwrap();
-            let _file_path = sub_matches.get_one::<String>("FILE_PATH").unwrap();
+            let file_name = sub_matches.get_one::<String>("FILE_NAME").unwrap();
             let output_path = sub_matches.get_one::<String>("OUTPUT");
 
             let adf = ADF::from_file(adf_path)?;
-            let file_block = 0;
-            let contents = adf.read_file_contents(file_block)?;
+            let contents = adf.extract_file(file_name)?;
 
             match output_path {
                 Some(path) => {
