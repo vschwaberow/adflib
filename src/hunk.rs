@@ -108,7 +108,7 @@ impl HunkParser {
 
     pub fn parse_hunks<R: Read + Seek>(reader: &mut R) -> io::Result<Vec<Hunk>> {
         Self::validate_hunk_header(reader)?;
-        let hunk_count = Self::read_hunk_table(reader)?;
+        let (hunk_count, _hunk_sizes) = Self::read_hunk_table(reader)?;
         let mut hunks = Vec::with_capacity(hunk_count);
 
         for _ in 0..hunk_count {
@@ -127,26 +127,25 @@ impl HunkParser {
         Ok(())
     }
 
-    fn read_hunk_table<R: Read>(reader: &mut R) -> io::Result<usize> {
-        let table_size = Self::read_u32(reader)? as i32;
-        let first_hunk = Self::read_u32(reader)? as i32;
-        let last_hunk = Self::read_u32(reader)? as i32;
+    fn read_hunk_table<R: Read>(reader: &mut R) -> io::Result<(usize, Vec<u32>)> {
+        let table_size = Self::read_u32(reader)?;
+        let first_hunk = Self::read_u32(reader)?;
+        let last_hunk = Self::read_u32(reader)?;
 
-        if table_size < 0 || first_hunk < 0 || last_hunk < 0 {
+        if last_hunk < first_hunk {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                "Invalid hunk table sizes",
+                "Last hunk index is less than first hunk index",
             ));
         }
 
         let hunk_count = (last_hunk - first_hunk + 1) as usize;
 
-        // Read and discard hunk sizes for now
-        for _ in 0..hunk_count {
-            Self::read_u32(reader)?;
-        }
+        let hunk_sizes = (0..hunk_count)
+            .map(|_| Self::read_u32(reader))
+            .collect::<io::Result<Vec<_>>>()?;
 
-        Ok(hunk_count)
+        Ok((hunk_count, hunk_sizes))
     }
 
     fn parse_hunk<R: Read + Seek>(reader: &mut R) -> io::Result<Hunk> {
