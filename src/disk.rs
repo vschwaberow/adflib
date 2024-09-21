@@ -193,8 +193,10 @@ impl ADF {
                 block_data[i * 4 + 3],
             ]);
             if sector != 0 {
-                let file_info = self.read_file_header(sector as usize)?;
-                files.push(file_info);
+                match self.read_file_header(sector as usize) {
+                    Ok(file_info) => files.push(file_info),
+                    Err(e) => eprintln!("Error reading file header: {}", e),
+                }
             }
         }
 
@@ -235,7 +237,11 @@ impl ADF {
             block_data[451],
         ]);
 
-        let secs = days * 86400 + mins * 60 + ticks / 50;
+        let secs = days.checked_mul(86400)
+            .and_then(|d| d.checked_add(mins.checked_mul(60)?))
+            .and_then(|t| t.checked_add(ticks.checked_div(50)?))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Date calculation overflow"))?;
+
         let creation_date = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64);
 
         Ok(FileInfo {
