@@ -237,12 +237,13 @@ impl ADF {
             block_data[451],
         ]);
 
-        let secs = days.checked_mul(86400)
-            .and_then(|d| d.checked_add(mins.checked_mul(60)?))
-            .and_then(|t| t.checked_add(ticks.checked_div(50)?))
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Date calculation overflow"))?;
-
-        let creation_date = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64);
+        let creation_date = match days.checked_mul(86400)
+            .and_then(|d| d.checked_add(mins.checked_mul(60).unwrap_or(0)))
+            .and_then(|t| t.checked_add(ticks.checked_div(50).unwrap_or(0)))
+        {
+            Some(secs) => SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64),
+            None => SystemTime::UNIX_EPOCH, // Use UNIX_EPOCH as a fallback for invalid dates
+        };
 
         Ok(FileInfo {
             name,
