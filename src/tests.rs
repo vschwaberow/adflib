@@ -92,6 +92,24 @@ mod tests {
         assert_eq!(read_data, &test_data[..]);
     }
 
+    fn test_format_creation_time() {
+        let adf = ADF {
+            data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+        };
+        let time = SystemTime::now();
+        let result = ADF::format_creation_date(time);
+        assert_eq!(result, ADF::format_creation_date(time));
+    }
+
+    fn test_format_protection_flags() {
+        let adf = ADF {
+            data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+        };
+        let flags = 0b10101010;
+        let result = adf.format_protection_flags(flags);
+        assert_eq!(result, flags.to_string());
+    }
+
     #[test]
     fn test_load_adf_from_zip() {
         let mut zip_buffer = Vec::new();
