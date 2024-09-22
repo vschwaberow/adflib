@@ -34,6 +34,60 @@ pub struct FileInfo {
     pub creation_date: SystemTime,
 }
 
+#[derive(Debug)]
+pub struct DiskInfo {
+    pub filesystem: String,
+    pub disk_name: String,
+    pub creation_date: u32,
+    pub disk_size: u32,
+    pub heads: u8,
+    pub tracks: u8,
+    pub sectors_per_track: u8,
+    pub bytes_per_sector: u16,
+    pub hash_table_size: u32,
+    pub first_reserved_block: u32,
+    pub last_reserved_block: u32,
+}
+
+impl DiskInfo {
+    pub fn as_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl std::fmt::Display for DiskInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug)]
+pub struct ExtractedFile {
+    name: String,
+    size: u32,
+    header_block: u32,
+    is_ascii: bool,
+    contents: Vec<u8>,
+}
+
+impl ExtractedFile {
+    pub fn as_string(&self) -> io::Result<String> {
+        if self.is_ascii {
+            Ok(String::from_utf8(self.contents.clone())
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "File contents are not ASCII",
+            ))
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.contents
+    }
+}
+
 pub fn load_adf_from_zip(zip_data: &[u8], adf_filename: &str) -> io::Result<ADF> {
     let reader = std::io::Cursor::new(zip_data);
     let mut archive =
@@ -64,9 +118,9 @@ impl ADF {
         self.write_bitmap_blocks()?;
         Ok(())
     }
-    pub fn extract_file(&self, file_name: &str) -> io::Result<Vec<u8>> {
+    pub fn extract_file(&self, file_name: &str) -> io::Result<ExtractedFile> {
         let root_files = self.list_root_directory()?;
-        
+
         for file_info in root_files {
             if file_info.name == file_name {
                 if file_info.is_dir {
@@ -75,24 +129,23 @@ impl ADF {
                         "Cannot extract a directory",
                     ));
                 }
-                
+
                 let file_header_block = self.find_file_header_block(ROOT_BLOCK, file_name)?;
-                println!("File: {} (Size: {} bytes)", file_name, file_info.size);
-                println!("Header block: sector {}", file_header_block);
-                
                 let contents = self.read_file_contents(file_header_block)?;
-                
-                // Basic file type detection
-                if contents.iter().all(|&b| b.is_ascii_graphic() || b.is_ascii_whitespace()) {
-                    println!("Content (ASCII text):\n{}", String::from_utf8_lossy(&contents));
-                } else {
-                    println!("Content: Binary data ({} bytes)", contents.len());
-                }
-                
-                return Ok(contents);
+                let is_ascii = contents
+                    .iter()
+                    .all(|&b| b.is_ascii_graphic() || b.is_ascii_whitespace());
+
+                return Ok(ExtractedFile {
+                    name: file_name.to_string(),
+                    size: file_info.size as u32,
+                    header_block: file_header_block as u32,
+                    is_ascii,
+                    contents,
+                });
             }
         }
-        
+
         Err(io::Error::new(
             io::ErrorKind::NotFound,
             format!("File '{}' not found", file_name),
@@ -101,7 +154,7 @@ impl ADF {
 
     fn find_file_header_block(&self, dir_block: usize, file_name: &str) -> io::Result<usize> {
         let block_data = self.read_sector(dir_block);
-        
+
         for i in (24..=51).rev() {
             let sector = u32::from_be_bytes([
                 block_data[i * 4],
@@ -116,7 +169,7 @@ impl ADF {
                 }
             }
         }
-        
+
         Err(io::Error::new(
             io::ErrorKind::NotFound,
             format!("File header block for '{}' not found", file_name),
@@ -178,14 +231,12 @@ impl ADF {
     }
 
     pub fn list_root_directory(&self) -> Result<Vec<FileInfo>> {
-        self.list_directory(ROOT_BLOCK)
+        self.list_directory(ROOT_BLOCK).collect()
     }
 
-    pub fn list_directory(&self, block: usize) -> Result<Vec<FileInfo>> {
+    pub fn list_directory(&self, block: usize) -> impl Iterator<Item = Result<FileInfo>> + '_ {
         let block_data = self.read_sector(block);
-        let mut files = Vec::new();
-
-        for i in (24..=51).rev() {
+        (24..=51).rev().filter_map(move |i| {
             let sector = u32::from_be_bytes([
                 block_data[i * 4],
                 block_data[i * 4 + 1],
@@ -193,12 +244,11 @@ impl ADF {
                 block_data[i * 4 + 3],
             ]);
             if sector != 0 {
-                let file_info = self.read_file_header(sector as usize)?;
-                files.push(file_info);
+                Some(self.read_file_header(sector as usize))
+            } else {
+                None
             }
-        }
-
-        Ok(files)
+        })
     }
 
     fn read_file_header(&self, block: usize) -> Result<FileInfo> {
@@ -235,8 +285,14 @@ impl ADF {
             block_data[451],
         ]);
 
-        let secs = days * 86400 + mins * 60 + ticks / 50;
-        let creation_date = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64);
+        let creation_date = match days
+            .checked_mul(86400)
+            .and_then(|d| d.checked_add(mins.checked_mul(60).unwrap_or(0)))
+            .and_then(|t| t.checked_add(ticks.checked_div(50).unwrap_or(0)))
+        {
+            Some(secs) => SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64),
+            None => SystemTime::UNIX_EPOCH,
+        };
 
         Ok(FileInfo {
             name,
@@ -252,7 +308,12 @@ impl ADF {
 
         match block_data[0] {
             2 => {
-                let file_size = u32::from_be_bytes([block_data[4], block_data[5], block_data[6], block_data[7]]) as usize;
+                let file_size = u32::from_be_bytes([
+                    block_data[4],
+                    block_data[5],
+                    block_data[6],
+                    block_data[7],
+                ]) as usize;
                 let mut contents = Vec::with_capacity(file_size);
 
                 let mut current_block = u32::from_be_bytes([
@@ -266,34 +327,57 @@ impl ADF {
                     let data_block = self.read_sector(current_block);
                     let data_size = std::cmp::min(512 - 24, file_size - contents.len());
                     contents.extend_from_slice(&data_block[24..24 + data_size]);
-                    current_block = u32::from_be_bytes([data_block[0], data_block[1], data_block[2], data_block[3]]) as usize;
+                    current_block = u32::from_be_bytes([
+                        data_block[0],
+                        data_block[1],
+                        data_block[2],
+                        data_block[3],
+                    ]) as usize;
                 }
 
                 if contents.len() != file_size {
                     return Err(io::Error::new(
                         io::ErrorKind::UnexpectedEof,
-                        format!("File size mismatch. Expected: {}, Read: {}", file_size, contents.len()),
+                        format!(
+                            "File size mismatch. Expected: {}, Read: {}",
+                            file_size,
+                            contents.len()
+                        ),
                     ));
                 }
 
                 Ok(contents)
-            },
+            }
             0 => {
-                // Handle type 0 blocks (possibly direct data blocks)
-                let file_size = u32::from_be_bytes([block_data[4], block_data[5], block_data[6], block_data[7]]) as usize;
+                let file_size = u32::from_be_bytes([
+                    block_data[4],
+                    block_data[5],
+                    block_data[6],
+                    block_data[7],
+                ]) as usize;
                 let mut contents = Vec::with_capacity(file_size);
                 contents.extend_from_slice(&block_data[24..]);
 
-                let mut current_block = u32::from_be_bytes([block_data[16], block_data[17], block_data[18], block_data[19]]) as usize;
+                let mut current_block = u32::from_be_bytes([
+                    block_data[16],
+                    block_data[17],
+                    block_data[18],
+                    block_data[19],
+                ]) as usize;
                 while current_block != 0 && contents.len() < file_size {
                     let data_block = self.read_sector(current_block);
                     let data_size = std::cmp::min(512, file_size - contents.len());
                     contents.extend_from_slice(&data_block[..data_size]);
-                    current_block = u32::from_be_bytes([data_block[0], data_block[1], data_block[2], data_block[3]]) as usize;
+                    current_block = u32::from_be_bytes([
+                        data_block[0],
+                        data_block[1],
+                        data_block[2],
+                        data_block[3],
+                    ]) as usize;
                 }
 
                 Ok(contents)
-            },
+            }
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Unexpected block type: {}", block_data[0]),
@@ -304,9 +388,7 @@ impl ADF {
     fn write_boot_block(&mut self, disk_type: DiskType) -> Result<()> {
         let mut boot_block = [0u8; ADF_SECTOR_SIZE * 2];
 
-        boot_block[0] = b'D';
-        boot_block[1] = b'O';
-        boot_block[2] = b'S';
+        boot_block[..4].copy_from_slice(b"DOS\0");
 
         boot_block[3] = match disk_type {
             DiskType::OFS => 0,
@@ -320,99 +402,95 @@ impl ADF {
     fn write_root_block(&mut self, disk_type: DiskType, disk_name: &str) -> Result<()> {
         let mut root_block = [0u8; ADF_SECTOR_SIZE];
 
-        // Block type (2 = T_HEADER)
         root_block[0] = 2;
 
-        // Disk type
         root_block[ADF_SECTOR_SIZE - 4] = match disk_type {
             DiskType::OFS => 0,
             DiskType::FFS => 1,
         };
 
-        // Hash table size (72 entries for Amiga floppy disks)
-        root_block[12] = 0;
-        root_block[13] = 72;
+        root_block[12..14].copy_from_slice(&72u16.to_be_bytes());
 
-        // Bitmap flag and bitmap blocks
         if matches!(disk_type, DiskType::FFS) {
-            root_block[ADF_SECTOR_SIZE - 200] = 0xFF; // Bitmap flag
-                                                      // Set bitmap pointers (blocks 881, 882, ...)
+            root_block[ADF_SECTOR_SIZE - 200] = 0xFF;
             for i in 0..25 {
-                let block_num = ROOT_BLOCK as u32 + 1 + i as u32;
+                let block_num = u32::to_be_bytes(ROOT_BLOCK as u32 + 1 + i as u32);
                 root_block[ADF_SECTOR_SIZE - 196 + i * 4..ADF_SECTOR_SIZE - 192 + i * 4]
-                    .copy_from_slice(&block_num.to_be_bytes());
+                    .copy_from_slice(&block_num);
             }
         }
 
-        // Disk name
         let name_bytes = disk_name.as_bytes();
-        root_block[ADF_SECTOR_SIZE - 80] = name_bytes.len() as u8;
-        root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_bytes.len()]
-            .copy_from_slice(name_bytes);
+        let name_len = std::cmp::min(name_bytes.len(), 30);
+        root_block[ADF_SECTOR_SIZE - 80] = name_len as u8;
+        root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len]
+            .copy_from_slice(&name_bytes[..name_len]);
 
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let days = (now.as_secs() / 86400) as u32;
-        let mins = ((now.as_secs() % 86400) / 60) as u32;
-        let ticks = ((now.as_secs() % 60) * 50) as u32;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
 
-        root_block[ADF_SECTOR_SIZE - 92..ADF_SECTOR_SIZE - 88].copy_from_slice(&days.to_be_bytes());
-        root_block[ADF_SECTOR_SIZE - 88..ADF_SECTOR_SIZE - 84].copy_from_slice(&mins.to_be_bytes());
-        root_block[ADF_SECTOR_SIZE - 84..ADF_SECTOR_SIZE - 80]
-            .copy_from_slice(&ticks.to_be_bytes());
+        root_block[ADF_SECTOR_SIZE - 92..ADF_SECTOR_SIZE - 88].copy_from_slice(&days);
+        root_block[ADF_SECTOR_SIZE - 88..ADF_SECTOR_SIZE - 84].copy_from_slice(&mins);
+        root_block[ADF_SECTOR_SIZE - 84..ADF_SECTOR_SIZE - 80].copy_from_slice(&ticks);
 
-        self.write_sector(ROOT_BLOCK, &root_block)?;
-        Ok(())
+        self.write_sector(ROOT_BLOCK, &root_block)
     }
 
     fn write_bitmap_blocks(&mut self) -> Result<()> {
         let mut bitmap_block = [0xFFu8; ADF_SECTOR_SIZE];
 
-        bitmap_block[0] = 0xF8; // 11111000
-        bitmap_block[1] = 0xFF; // 11111111
-        bitmap_block[2] = 0xFF; // 11111111
+        bitmap_block[0] = 0xF8;
+        bitmap_block[1] = 0xFF;
+        bitmap_block[2] = 0xFF;
 
         self.write_sector(ROOT_BLOCK + 1, &bitmap_block)?;
         self.write_sector(ROOT_BLOCK + 2, &[0xFFu8; ADF_SECTOR_SIZE])?;
 
         Ok(())
     }
-    pub fn information(&self) -> io::Result<String> {
+    pub fn information(&self) -> io::Result<DiskInfo> {
         let root_block = self.read_sector(ROOT_BLOCK);
-        let disk_name = self.read_disk_name()?;
-        let creation_date = u32::from_be_bytes([root_block[16], root_block[17], root_block[18], root_block[19]]);
-        let filesystem = if root_block[3] & 1 == 1 { "FFS (Fast File System)" } else { "OFS (Old File System)" };
-
-        let info = format!(
-            "ADF Information\n\n\
-             General:\n\
-             Filesystem:      {}\n\
-             Disk Name:       {}\n\
-             Creation Date:   {}\n\n\
-             Disk Geometry:\n\
-             Disk Size:       {} bytes\n\
-             Heads:           {}\n\
-             Tracks:          {}\n\
-             Sectors/Track:   {}\n\
-             Bytes/Sector:    {}\n\n\
-             Filesystem Details:\n\
-             Hash Table Size: {}\n\
-             Reserved Blocks:\n\
-               First:         {}\n\
-               Last:          {}",
-            filesystem,
-            disk_name,
-            creation_date,
-            ADF_TRACK_SIZE * ADF_NUM_TRACKS,
-            2,
-            80,
-            11,
-            512,
-            u32::from_be_bytes([root_block[12], root_block[13], root_block[14], root_block[15]]),
-            u32::from_be_bytes([root_block[128], root_block[129], root_block[130], root_block[131]]),
-            u32::from_be_bytes([root_block[132], root_block[133], root_block[134], root_block[135]])
-        );
-
-        Ok(info)
+        Ok(DiskInfo {
+            filesystem: if root_block[3] & 1 == 1 {
+                "FFS".to_string()
+            } else {
+                "OFS".to_string()
+            },
+            disk_name: self.read_disk_name()?,
+            creation_date: u32::from_be_bytes([
+                root_block[16],
+                root_block[17],
+                root_block[18],
+                root_block[19],
+            ]) as u32,
+            disk_size: (ADF_TRACK_SIZE * ADF_NUM_TRACKS) as u32,
+            heads: 2,
+            tracks: (ADF_NUM_TRACKS / 2) as u8,
+            sectors_per_track: 11,
+            bytes_per_sector: 512,
+            hash_table_size: u32::from_be_bytes([
+                root_block[12],
+                root_block[13],
+                root_block[14],
+                root_block[15],
+            ]),
+            first_reserved_block: u32::from_be_bytes([
+                root_block[128],
+                root_block[129],
+                root_block[130],
+                root_block[131],
+            ]),
+            last_reserved_block: u32::from_be_bytes([
+                root_block[132],
+                root_block[133],
+                root_block[134],
+                root_block[135],
+            ]),
+        })
     }
 
     pub fn list(&self) -> Result<String> {
@@ -430,7 +508,10 @@ impl ADF {
     fn read_disk_name(&self) -> io::Result<String> {
         let root_block = self.read_sector(ROOT_BLOCK);
         let name_len = root_block[ADF_SECTOR_SIZE - 80] as usize;
-        let name = String::from_utf8_lossy(&root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len]).to_string();
+        let name = String::from_utf8_lossy(
+            &root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len],
+        )
+        .to_string();
         Ok(name)
     }
 }

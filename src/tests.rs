@@ -59,21 +59,24 @@ mod tests {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
         };
         adf.format(DiskType::FFS, "TestDisk").unwrap();
-
         let info = adf.information().unwrap();
-        assert!(info.contains("Filesystem: FFS"));
-        assert!(info.contains("Disk Name: TestDisk"));
-        assert!(info.contains(&format!(
+        assert_eq!(info.disk_name, "TestDisk");
+        assert_eq!(info.disk_size, (ADF_TRACK_SIZE * ADF_NUM_TRACKS) as u32);
+        assert!(format!("{:?}", info).contains(&format!(
             "Disk Size: {} bytes",
             ADF_TRACK_SIZE * ADF_NUM_TRACKS
         )));
-        assert!(info.contains("Heads: 2"));
-        assert!(info.contains(&format!("Tracks: {}", ADF_NUM_TRACKS / 2)));
-        assert!(info.contains(&format!(
+        assert_eq!(info.heads, 2);
+        assert_eq!(info.tracks, (ADF_NUM_TRACKS / 2) as u8);
+        assert_eq!(
+            info.sectors_per_track,
+            (ADF_TRACK_SIZE / ADF_SECTOR_SIZE) as u8
+        );
+        assert!(format!("{:?}", info).contains(&format!(
             "Sectors per Track: {}",
             ADF_TRACK_SIZE / ADF_SECTOR_SIZE
         )));
-        assert!(info.contains(&format!("Bytes per Sector: {}", ADF_SECTOR_SIZE)));
+        assert!(format!("{:?}", info).contains(&format!("Bytes per Sector: {}", ADF_SECTOR_SIZE)));
     }
 
     #[test]

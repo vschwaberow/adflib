@@ -3,10 +3,29 @@
 // Copyright (c) 2023
 // - Volker Schwaberow <volker@schwaberow.de>
 
-use adflib::disk::{DiskType, ADF, ADF_NUM_TRACKS, ADF_TRACK_SIZE};
+use adflib::disk::{DiskType, FileInfo, ADF, ADF_NUM_TRACKS, ADF_TRACK_SIZE};
 use clap::{Arg, Command};
 use std::fs::File;
 use std::io::Write;
+use std::time::UNIX_EPOCH;
+
+fn print_directory_listing(file_path: &str, files: &[FileInfo]) {
+    println!("Directory of {}", file_path);
+    println!("Name                 Size    Flags   Creation Date");
+    println!("----                 ----    -----   -------------");
+
+    for file in files {
+        let flags = if file.is_dir { "  d" } else { "---" };
+        let date = file
+            .creation_date
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        println!("{:<20} {:>5}  {}     {}", file.name, file.size, flags, date);
+    }
+
+    println!("{} files", files.len());
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmd = Command::new("adflibtesttool")
@@ -103,15 +122,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|s| s.parse::<usize>().unwrap_or(880))
                 .unwrap_or(880);
 
-            let files = adf.list_directory(directory)?;
-            println!("Directory of {}", file_path);
-            println!("Name                 Size    Flags");
-            println!("----                 ----    -----");
-            for file in &files {
-                let flags = if file.is_dir { "  d" } else { "---" };
-                println!("{:<20} {:>5}  {}", file.name, file.size, flags);
-            }
-            println!("{} files", files.len());
+            let files = adf
+                .list_directory(directory)
+                .collect::<Result<Vec<FileInfo>, _>>()?;
+            print_directory_listing(file_path, &files);
+
+            // match adf.list_directory(directory) {
+            //     Ok(files) => {
+            //         for file_result in files {
+            //             match file_result {
+            //                 Ok(file_info) => print_directory_listing(file_path, &[file_info]),
+            //                 Err(e) => eprintln!("Error processing file: {}", e),
+            //             }
+            //         }
+            //     },
+            //     Err(e) => eprintln!("Error listing directory: {}", e),
+            // }
         }
         Some(("extract", sub_matches)) => {
             let adf_path = sub_matches.get_one::<String>("ADF_FILE").unwrap();
@@ -124,10 +150,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match output_path {
                 Some(path) => {
                     let mut file = File::create(path)?;
-                    file.write_all(&contents)?;
+                    file.write_all(contents.as_bytes())?;
                 }
                 None => {
-                    std::io::stdout().write_all(&contents)?;
+                    std::io::stdout().write_all(contents.as_bytes())?;
                 }
             }
         }
