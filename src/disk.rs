@@ -303,6 +303,25 @@ impl ADF {
         })
     }
 
+    pub fn format_protection_flags(&self, flags: u32) -> String {
+        let mut result = String::with_capacity(8);
+        result.push(if flags & 0x80 == 0 { 'h' } else { '-' }); // hidden
+        result.push(if flags & 0x40 == 0 { 's' } else { '-' }); // script
+        result.push(if flags & 0x20 == 0 { 'p' } else { '-' }); // pure
+        result.push(if flags & 0x10 == 0 { 'a' } else { '-' }); // archive
+        result.push(if flags & 0x08 == 0 { 'r' } else { '-' }); // read
+        result.push(if flags & 0x04 == 0 { 'w' } else { '-' }); // write
+        result.push(if flags & 0x02 == 0 { 'e' } else { '-' }); // execute
+        result.push(if flags & 0x01 == 0 { 'd' } else { '-' }); // delete
+        result
+    }
+
+    pub fn format_creation_date(time: SystemTime) -> String {
+        time.duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs().to_string())
+            .unwrap_or_else(|_| "Invalid date".to_string())
+    }
+
     pub fn read_file_contents(&self, block: usize) -> io::Result<Vec<u8>> {
         let block_data = self.read_sector(block);
 
