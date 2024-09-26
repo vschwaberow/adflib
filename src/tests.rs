@@ -2,8 +2,8 @@
 mod tests {
     use super::*;
     use crate::disk::{
-        load_adf_from_zip, DiskType, ADF, ADF_NUM_TRACKS, ADF_SECTOR_SIZE, ADF_TRACK_SIZE,
-        ROOT_BLOCK,
+        format_creation_date, load_adf_from_zip, DiskType, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS,
+        ADF_SECTOR_SIZE, ADF_TRACK_SIZE, ROOT_BLOCK,
     };
     use std::{
         io::Write,
@@ -16,6 +16,7 @@ mod tests {
     fn test_adf_creation() {
         let adf = ADF {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![false; ADF_NUM_SECTORS],
         };
         assert_eq!(adf.data.len(), ADF_TRACK_SIZE * ADF_NUM_TRACKS);
     }
@@ -24,6 +25,7 @@ mod tests {
     fn test_adf_formatting() {
         let mut adf = ADF {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![false; ADF_NUM_SECTORS],
         };
         adf.format(DiskType::OFS, "TestDisk").unwrap();
 
@@ -46,6 +48,7 @@ mod tests {
     fn test_file_listing() {
         let mut adf = ADF {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![false; ADF_NUM_SECTORS],
         };
         adf.format(DiskType::OFS, "TestDisk").unwrap();
 
@@ -57,6 +60,7 @@ mod tests {
     fn test_disk_information() {
         let mut adf = ADF {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![false; ADF_NUM_SECTORS],
         };
         adf.format(DiskType::FFS, "TestDisk").unwrap();
         let info = adf.information().unwrap();
@@ -83,6 +87,7 @@ mod tests {
     fn test_read_write_sector() {
         let mut adf = ADF {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![false; ADF_NUM_SECTORS],
         };
 
         let test_data = [42u8; ADF_SECTOR_SIZE];
@@ -95,15 +100,17 @@ mod tests {
     fn test_format_creation_time() {
         let adf = ADF {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![false; ADF_NUM_SECTORS],
         };
         let time = SystemTime::now();
-        let result = ADF::format_creation_date(time);
-        assert_eq!(result, ADF::format_creation_date(time));
+        let result = format_creation_date(time);
+        assert_eq!(result, format_creation_date(time));
     }
 
     fn test_format_protection_flags() {
         let adf = ADF {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![false; ADF_NUM_SECTORS],
         };
         let flags = 0b10101010;
         let result = adf.format_protection_flags(flags);
