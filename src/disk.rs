@@ -3,6 +3,7 @@
 // Copyright (c) 2023
 // - Volker Schwaberow <volker@schwaberow.de>
 
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{self, Error, ErrorKind, Read, Result, Write};
@@ -15,19 +16,19 @@ pub const ROOT_BLOCK: usize = 880;
 pub const ADF_SECTOR_SIZE: usize = 512;
 pub const ADF_NUM_SECTORS: usize = 1760;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ADF {
     pub data: Vec<u8>,
     pub bitmap: Vec<bool>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DiskType {
     OFS,
     FFS,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileInfo {
     pub name: String,
     pub size: u32,
@@ -36,7 +37,7 @@ pub struct FileInfo {
     pub creation_date: SystemTime,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiskInfo {
     pub filesystem: String,
     pub disk_name: String,
@@ -63,7 +64,7 @@ impl std::fmt::Display for DiskInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedFile {
     name: String,
     size: u32,
@@ -72,13 +73,20 @@ pub struct ExtractedFile {
     contents: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BitmapInfo {
     pub total_blocks: u32,
     pub free_blocks: u32,
     pub used_blocks: u32,
     pub disk_usage_percentage: f32,
     pub block_allocation_map: Vec<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ADFMetadata {
+    pub disk_info: DiskInfo,
+    pub file_list: Vec<FileInfo>,
+    pub bitmap_info: BitmapInfo,
 }
 
 impl std::fmt::Display for BitmapInfo {
@@ -139,6 +147,14 @@ impl ADF {
             data: vec![0; size * block_size],
             bitmap: vec![true; size],
         }
+    }
+
+    pub fn extract_metadata(&self) -> io::Result<ADFMetadata> {
+        Ok(ADFMetadata {
+            disk_info: self.information()?,
+            file_list: self.list_root_directory()?,
+            bitmap_info: self.get_bitmap_info(),
+        })
     }
 
     pub fn format(&mut self, disk_type: DiskType, disk_name: &str) -> Result<()> {
@@ -725,5 +741,27 @@ impl ADF {
         )
         .to_string();
         Ok(name)
+    }
+
+    pub fn to_json(&self) -> Result<String> {
+        serde_json::to_string(self).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    }
+
+    pub fn from_json(json: &str) -> Result<Self> {
+        serde_json::from_str(json).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    }
+
+    pub fn save_to_json_file(&self, path: &str) -> Result<()> {
+        let json = self.to_json()?;
+        let mut file = File::create(path)?;
+        file.write_all(json.as_bytes())?;
+        Ok(())
+    }
+
+    pub fn load_from_json_file(path: &str) -> Result<Self> {
+        let mut file = File::open(path)?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+        Self::from_json(&contents)
     }
 }
