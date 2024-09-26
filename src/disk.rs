@@ -9,14 +9,16 @@ use std::io::{self, Error, ErrorKind, Read, Result, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
-pub const ADF_SECTOR_SIZE: usize = 512;
 pub const ADF_TRACK_SIZE: usize = 11 * ADF_SECTOR_SIZE;
 pub const ADF_NUM_TRACKS: usize = 80 * 2;
 pub const ROOT_BLOCK: usize = 880;
+pub const ADF_SECTOR_SIZE: usize = 512;
+pub const ADF_NUM_SECTORS: usize = 1760;
 
 #[derive(Debug, Clone)]
 pub struct ADF {
     pub data: Vec<u8>,
+    pub bitmap: Vec<bool>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -70,6 +72,21 @@ pub struct ExtractedFile {
     contents: Vec<u8>,
 }
 
+#[derive(Debug)]
+pub struct BitmapInfo {
+    pub total_blocks: u32,
+    pub free_blocks: u32,
+    pub used_blocks: u32,
+    pub disk_usage_percentage: f32,
+    pub block_allocation_map: Vec<bool>,
+}
+
+impl std::fmt::Display for BitmapInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl ExtractedFile {
     pub fn as_string(&self) -> io::Result<String> {
         if self.is_ascii {
@@ -86,6 +103,12 @@ impl ExtractedFile {
     pub fn as_bytes(&self) -> &[u8] {
         &self.contents
     }
+}
+
+pub fn format_creation_date(time: SystemTime) -> String {
+    time.duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_else(|_| "Invalid date".to_string())
 }
 
 pub fn load_adf_from_zip(zip_data: &[u8], adf_filename: &str) -> io::Result<ADF> {
@@ -111,6 +134,13 @@ pub fn load_adf_from_zip(zip_data: &[u8], adf_filename: &str) -> io::Result<ADF>
 }
 
 impl ADF {
+    pub fn new(size: usize, block_size: usize) -> Self {
+        ADF {
+            data: vec![0; size * block_size],
+            bitmap: vec![true; size],
+        }
+    }
+
     pub fn format(&mut self, disk_type: DiskType, disk_name: &str) -> Result<()> {
         self.data.fill(0);
         self.write_boot_block(disk_type)?;
@@ -189,20 +219,109 @@ impl ADF {
         }
         Ok(ADF {
             data: data.to_vec(),
+            bitmap: vec![true; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
         })
     }
 
     pub fn from_file(path: &str) -> Result<ADF> {
         let mut file = File::open(path)?;
-        let mut data = vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS];
+        let mut data = vec![0; ADF_SECTOR_SIZE * ADF_NUM_SECTORS];
         file.read_exact(&mut data)?;
-        Ok(ADF { data })
+        ADF::from_bytes(&data)
+    }
+
+    pub fn get_bitmap(&self) -> &[bool] {
+        &self.bitmap
+    }
+
+    pub fn get_bitmap_info(&self) -> BitmapInfo {
+        let bitmap_block = self.read_sector(ROOT_BLOCK + 1);
+        let mut free_blocks = 0;
+        let mut used_blocks = 0;
+        let mut block_allocation_map = Vec::with_capacity(ADF_NUM_SECTORS);
+
+        for (i, &byte) in bitmap_block.iter().enumerate() {
+            if i < 220 {
+                for bit in 0..8 {
+                    if i * 8 + bit < ADF_NUM_SECTORS {
+                        let is_free = byte & (1 << (7 - bit)) != 0;
+                        if is_free {
+                            free_blocks += 1;
+                        } else {
+                            used_blocks += 1;
+                        }
+                        block_allocation_map.push(!is_free);
+                    }
+                }
+            }
+        }
+
+        let disk_usage_percentage = (used_blocks as f64 / ADF_NUM_SECTORS as f64) * 100.0;
+
+        BitmapInfo {
+            total_blocks: ADF_NUM_SECTORS as u32,
+            free_blocks,
+            used_blocks,
+            disk_usage_percentage: disk_usage_percentage as f32,
+            block_allocation_map,
+        }
+    }
+
+    pub fn get_block_status(&self, block_index: usize) -> Option<bool> {
+        if block_index < self.bitmap.len() {
+            Some(self.bitmap[block_index])
+        } else {
+            None
+        }
+    }
+
+    pub fn set_block_status(&mut self, block_index: usize, status: bool) -> Result<()> {
+        if block_index < self.bitmap.len() {
+            self.bitmap[block_index] = status;
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Invalid block index",
+            ))
+        }
+    }
+
+    pub fn defragment(&mut self) -> Result<()> {
+        let mut free_blocks = Vec::new();
+        for (i, &is_free) in self.bitmap.iter().enumerate() {
+            if is_free {
+                free_blocks.push(i);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn get_fragmentation_score(&self) -> usize {
+        self.bitmap.iter().filter(|&&b| !b).count()
     }
 
     pub fn write_to_file(&self, path: &str) -> Result<()> {
         let mut file = File::create(path)?;
         file.write_all(&self.data)?;
         Ok(())
+    }
+
+    pub fn find_contiguous_free_blocks(&self, count: usize) -> Option<usize> {
+        let mut free_blocks = Vec::new();
+        for (i, &is_free) in self.bitmap.iter().enumerate() {
+            if is_free {
+                free_blocks.push(i);
+            }
+        }
+
+        for i in 0..free_blocks.len() - count {
+            if free_blocks[i + count] - free_blocks[i] == count {
+                return Some(free_blocks[i]);
+            }
+        }
+
+        None
     }
 
     pub fn read_sector(&self, sector: usize) -> &[u8] {
@@ -316,10 +435,84 @@ impl ADF {
         result
     }
 
-    pub fn format_creation_date(time: SystemTime) -> String {
-        time.duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs().to_string())
-            .unwrap_or_else(|_| "Invalid date".to_string())
+    pub fn calculate_checksum(&self, data: &[u8]) -> u32 {
+        let mut checksum = 0u32;
+        for chunk in data.chunks(4) {
+            let word = u32::from_be_bytes([
+                chunk[0],
+                chunk.get(1).copied().unwrap_or(0),
+                chunk.get(2).copied().unwrap_or(0),
+                chunk.get(3).copied().unwrap_or(0),
+            ]);
+            checksum = checksum.wrapping_add(word);
+        }
+        !checksum
+    }
+
+    pub fn set_block_used(&mut self, block_index: usize) {
+        if block_index < self.bitmap.len() {
+            self.bitmap[block_index] = false;
+        }
+    }
+
+    pub fn set_block_free(&mut self, block_index: usize) {
+        if block_index < self.bitmap.len() {
+            self.bitmap[block_index] = true;
+        }
+    }
+
+    pub fn update_bitmap_blocks(&mut self) -> Result<()> {
+        let bitmap_block_index = ROOT_BLOCK + 1;
+        let mut bitmap_block = vec![0u8; ADF_SECTOR_SIZE];
+        for block_index in 2..ADF_NUM_SECTORS {
+            let byte_index = block_index / 8;
+            let bit_index = block_index % 8;
+            if self.bitmap[block_index] {
+                bitmap_block[byte_index] |= 1 << (7 - bit_index);
+            } else {
+                bitmap_block[byte_index] &= !(1 << (7 - bit_index));
+            }
+        }
+        let checksum_offset = 0;
+        let checksum = self.calculate_checksum(&bitmap_block[checksum_offset..]);
+        bitmap_block[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_be_bytes());
+        self.write_sector(bitmap_block_index, &bitmap_block)?;
+        Ok(())
+    }
+
+    pub fn initialize_bitmap(&mut self) -> Result<()> {
+        let bitmap_block_index = ROOT_BLOCK + 1;
+        let mut bitmap_block = vec![0u8; ADF_SECTOR_SIZE];
+        bitmap_block[0] = 0; // bm_flag
+        bitmap_block[1] = 0;
+        let checksum_offset = 20;
+        let checksum = self.calculate_checksum(&bitmap_block[checksum_offset..]);
+        bitmap_block[4..8].copy_from_slice(&checksum.to_be_bytes());
+        self.write_sector(bitmap_block_index, &bitmap_block)?;
+        self.set_block_used(bitmap_block_index);
+        self.update_bitmap_blocks()?;
+        Ok(())
+    }
+
+    pub fn allocate_block(&mut self) -> Result<usize> {
+        if let Some(block_index) = self.find_free_block() {
+            self.set_block_used(block_index);
+            Ok(block_index)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "No free blocks available",
+            ))
+        }
+    }
+
+    pub fn find_free_block(&self) -> Option<usize> {
+        self.bitmap
+            .iter()
+            .enumerate()
+            .skip(2)
+            .find(|&(_, &is_free)| is_free)
+            .map(|(index, _)| index)
     }
 
     pub fn read_file_contents(&self, block: usize) -> io::Result<Vec<u8>> {

@@ -3,11 +3,55 @@
 // Copyright (c) 2023
 // - Volker Schwaberow <volker@schwaberow.de>
 
-use adflib::disk::{DiskType, FileInfo, ADF, ADF_NUM_TRACKS, ADF_TRACK_SIZE};
+use adflib::disk::{
+    BitmapInfo, DiskInfo, DiskType, FileInfo, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS, ADF_TRACK_SIZE,
+};
+use chrono::{DateTime, Utc};
 use clap::{Arg, Command};
 use std::fs::File;
 use std::io::Write;
 use std::time::UNIX_EPOCH;
+
+fn print_disk_info(info: &DiskInfo, file_path: &str) {
+    println!("ADF Information for: {}", file_path);
+    println!("------------------------");
+    println!("Filesystem:     {}", info.filesystem);
+    println!("Disk Name:      {}", info.disk_name);
+    let creation_date = DateTime::<Utc>::from_timestamp(info.creation_date as i64, 0)
+        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+        .unwrap_or_else(|| "Invalid Date".to_string());
+
+    println!("Creation Date:  {}", creation_date);
+    println!("Disk Size:      {} bytes", info.disk_size);
+    println!("Geometry:");
+    println!("  Heads:        {}", info.heads);
+    println!("  Tracks:       {}", info.tracks);
+    println!("  Sectors/Track:{}", info.sectors_per_track);
+    println!("  Bytes/Sector: {}", info.bytes_per_sector);
+    println!("Hash Table Size:{}", info.hash_table_size);
+    println!(
+        "Reserved Blocks:{} - {}",
+        info.first_reserved_block, info.last_reserved_block
+    );
+}
+
+fn display_bitmap_info(info: &BitmapInfo, full: bool) {
+    println!("Bitmap size: {} blocks", info.total_blocks);
+    println!("Free blocks: {}", info.free_blocks);
+    println!("Used blocks: {}", info.used_blocks);
+    println!("Disk usage: {:.2}%", info.disk_usage_percentage);
+
+    if full {
+        println!("\nBlock allocation map:");
+        for (i, &is_used) in info.block_allocation_map.iter().enumerate() {
+            print!("{}", if is_used { '#' } else { '.' });
+            if (i + 1) % 44 == 0 {
+                println!();
+            }
+        }
+        println!("\n. = Free block, # = Used block");
+    }
+}
 
 fn print_directory_listing(file_path: &str, files: &[FileInfo]) {
     println!("Directory of {}", file_path);
@@ -64,6 +108,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .long("output")
                         .value_name("FILE")
                         .help("Output file (default: stdout)"),
+                ),
+        )
+        .subcommand(
+            Command::new("bitmap")
+                .about("Performs bitmap operations on an ADF file")
+                .subcommand(
+                    Command::new("info")
+                        .about("Displays information about the bitmap of an ADF file")
+                        .arg(
+                            Arg::new("FILE")
+                                .required(true)
+                                .help("The ADF file to analyze"),
+                        )
+                        .arg(
+                            Arg::new("full")
+                                .short('f')
+                                .long("full")
+                                .help("Display full block allocation map")
+                                .action(clap::ArgAction::SetTrue),
+                        ),
+                )
+                .subcommand(
+                    Command::new("set")
+                        .about("Sets the status of a block")
+                        .arg(
+                            Arg::new("FILE")
+                                .required(true)
+                                .help("The ADF file to modify"),
+                        )
+                        .arg(
+                            Arg::new("BLOCK")
+                                .required(true)
+                                .help("The block number to set"),
+                        )
+                        .arg(
+                            Arg::new("STATUS")
+                                .required(true)
+                                .help("The status to set (free/used)"),
+                        ),
+                )
+                .subcommand(
+                    Command::new("defragment")
+                        .about("Defragments the ADF file")
+                        .arg(
+                            Arg::new("FILE")
+                                .required(true)
+                                .help("The ADF file to defragment"),
+                        ),
                 ),
         )
         .subcommand(
@@ -126,18 +218,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .list_directory(directory)
                 .collect::<Result<Vec<FileInfo>, _>>()?;
             print_directory_listing(file_path, &files);
-
-            // match adf.list_directory(directory) {
-            //     Ok(files) => {
-            //         for file_result in files {
-            //             match file_result {
-            //                 Ok(file_info) => print_directory_listing(file_path, &[file_info]),
-            //                 Err(e) => eprintln!("Error processing file: {}", e),
-            //             }
-            //         }
-            //     },
-            //     Err(e) => eprintln!("Error listing directory: {}", e),
-            // }
         }
         Some(("extract", sub_matches)) => {
             let adf_path = sub_matches.get_one::<String>("ADF_FILE").unwrap();
@@ -161,12 +241,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let file_path = sub_matches.get_one::<String>("FILE").unwrap();
             let adf = ADF::from_file(file_path)?;
             let info = adf.information()?;
-            println!("ADF Information for {}:\n{}", file_path, info);
+            print_disk_info(&info, file_path);
         }
+        Some(("bitmap", sub_matches)) => match sub_matches.subcommand() {
+            Some(("info", info_matches)) => {
+                let file_path = info_matches.get_one::<String>("FILE").unwrap();
+                let full = info_matches.get_flag("full");
+                let adf = ADF::from_file(file_path)?;
+                let bitmap_info = adf.get_bitmap_info();
+                println!("Bitmap information for {}:", file_path);
+                display_bitmap_info(&bitmap_info, full);
+            }
+            Some(("set", set_matches)) => {
+                let file_path = set_matches.get_one::<String>("FILE").unwrap();
+                let block = set_matches.get_one::<String>("BLOCK").unwrap();
+                let status = set_matches.get_one::<String>("STATUS").unwrap();
+                let mut adf = ADF::from_file(file_path)?;
+                let block_index = block.parse::<usize>()?;
+                let status = status.parse::<bool>()?;
+                adf.set_block_status(block_index, status)?;
+                adf.write_to_file(file_path)?;
+                println!("Block {} set to {}", block_index, status);
+            }
+            Some(("defragment", defragment_matches)) => {
+                let file_path = defragment_matches.get_one::<String>("FILE").unwrap();
+                let mut adf = ADF::from_file(file_path)?;
+                adf.defragment()?;
+                adf.write_to_file(file_path)?;
+                println!("ADF file defragmented");
+            }
+            _ => unreachable!("Exhaustive subcommand matching should prevent this"),
+        },
         Some(("create", sub_matches)) => {
             let file_path = sub_matches.get_one::<String>("FILE").unwrap();
             let adf = ADF {
                 data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+                bitmap: vec![false; ADF_NUM_SECTORS],
             };
             adf.write_to_file(file_path)?;
             println!("Created empty ADF file: {}", file_path);
@@ -187,6 +297,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 ADF {
                     data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+                    bitmap: vec![false; ADF_NUM_SECTORS],
                 }
             };
 

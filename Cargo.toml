@@ -20,5 +20,6 @@ panic = "abort"
 
 
 [dependencies]
+chrono = "0.4.38"
 clap = { version = "4.1.8", features = ["derive"] }
 zip = "2.1.3"
