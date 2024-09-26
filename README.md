@@ -28,15 +28,43 @@ Basic usage example:
 ```rust
 
 use adflib::ADF;
+use std::io::Result;
 
-fn main() -> std::io::Result<()> {
+fn main() -> Result<()> {
     let adf = ADF::from_file("my_disk.adf")?;
-    let info = adf.information()?;
-    println!("Disk Information:\n{}", info);
+    println!("ADF file loaded successfully");
     Ok(())
 }
 ```
 
+Getting disk information:
+
+```rust
+use adflib::ADF;
+use std::io::Result;
+
+fn main() -> Result<()> {
+    let adf = ADF::from_file("my_disk.adf")?;
+    let disk_info = adf.information?;
+    println!("ADF file loaded successfully");
+    Ok(())
+}
+```
+
+Extract files from ADF image:
+
+```rust
+use adflib::ADF;
+use std::io::Result;
+
+fn main() -> Result<()> {
+    let adf = ADF::from_file("my_disk.adf")?;
+    let extracted_file = adf.extract_file("my_file.txt")?;
+    Ok(())
+}
+```
+
+Read the documentation for more details.
 
 ## Command-line Tool
 
@@ -58,6 +86,8 @@ Commands:
 `info` Display information about an ADF file
 `list` List contents of an ADF file
 `extract` Extract files from an ADF image
+`create` Create a new ADF image
+`bitmap` Show the bitmap of an ADF image
 
 Example:
 
