@@ -15,22 +15,29 @@ const QBITMASK: u16 = 255;
 #[derive(Debug, Clone)]
 pub struct DMSHeader {
     pub signature: [u8; 4],
-    pub archive_header_len: u32,
-    pub version: u16,
-    pub disk_type: u8,
-    pub compressed_size: u32,
-    pub uncompressed_size: u32,
-    pub track_count: u16,
-    pub flags: u16,
+    pub header_type: [u8; 4],
+    pub info_bits: u32,
+    pub date: u32,
     pub low_track: u16,
     pub high_track: u16,
-    pub creation_date: u32,
-    pub creation_time: u32,
-    pub name: [u8; 20],
-    pub packing_mode: DMSPackingMode,
+    pub packed_size: u32,
+    pub unpacked_size: u32,
+    pub os_version: u16,
+    pub os_revision: u16,
+    pub machine_cpu: u16,
+    pub cpu_copro: u16,
+    pub machine_type: u16,
+    pub unused: u16,
+    pub cpu_mhz: u16,
+    pub time_create: u32,
+    pub version_creator: u16,
+    pub version_needed: u16,
+    pub diskette_type: u16,
+    pub compression_mode: u16,
+    pub info_header_crc: u16,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum DMSPackingMode {
     None,
     Simple,
@@ -39,10 +46,13 @@ pub enum DMSPackingMode {
     Deep,
     Heavy1,
     Heavy2,
+    Heavy3,
+    Heavy4,
+    Heavy5,
 }
 
-impl From<u8> for DMSPackingMode {
-    fn from(value: u8) -> Self {
+impl From<u16> for DMSPackingMode {
+    fn from(value: u16) -> Self {
         match value {
             0 => DMSPackingMode::None,
             1 => DMSPackingMode::Simple,
@@ -51,6 +61,9 @@ impl From<u8> for DMSPackingMode {
             4 => DMSPackingMode::Deep,
             5 => DMSPackingMode::Heavy1,
             6 => DMSPackingMode::Heavy2,
+            7 => DMSPackingMode::Heavy3,
+            8 => DMSPackingMode::Heavy4,
+            9 => DMSPackingMode::Heavy5,
             _ => DMSPackingMode::None,
         }
     }
@@ -59,36 +72,31 @@ impl From<u8> for DMSPackingMode {
 #[derive(Debug, Clone)]
 pub struct DMSInfo {
     pub signature: String,
-    pub version: u16,
-    pub disk_type: u8,
-    pub compressed_size: u32,
-    pub uncompressed_size: u32,
-    pub track_count: u16,
+    pub header_type: String,
+    pub info_bits: u32,
+    pub date: u32,
     pub low_track: u16,
     pub high_track: u16,
-    pub creation_date: u32,
-    pub creation_time: u32,
-    pub name: String,
-    pub packing_mode: DMSPackingMode,
-}
-
-#[derive(Debug)]
-pub struct TrackInfo {
-    pub number: u16,
-    pub packing_mode: DMSPackingMode,
-    pub data_size: u32,
+    pub packed_size: u32,
+    pub unpacked_size: u32,
+    pub compression_mode: DMSPackingMode,
 }
 
 #[derive(Debug, Clone)]
 pub struct DMSTrackHeader {
-    pub id: u16,
+    pub header_id: [u8; 2],
     pub track_number: u16,
-    pub flags: u8,
-    pub packing_mode: u8,
-    pub data_size: u32,
+    pub unused1: u16,
+    pub pack_length: u16,
+    pub unused2: u16,
+    pub unpack_length: u16,
+    pub c_flag: u8,
+    pub packing_mode: DMSPackingMode,
+    pub u_sum: u16,
+    pub d_crc: u16,
+    pub h_crc: u16,
 }
 
-#[derive(Debug, Clone)]
 pub struct DMSReader<R: Read + Seek> {
     reader: R,
     header: DMSHeader,
@@ -111,111 +119,101 @@ impl<R: Read + Seek> DMSReader<R> {
         })
     }
 
-    pub fn load_disk_info(&mut self) -> io::Result<DMSInfo> {
-        let dms_info = self.info();
-        let mut tracks = Vec::new();
-        self.reader.seek(SeekFrom::Start(DMS_HEADER_SIZE as u64))?;
-
-        for _ in 0..dms_info.track_count {
-            let track_header = self.read_track_header()?;
-            tracks.push(TrackInfo {
-                number: track_header.track_number,
-                packing_mode: DMSPackingMode::from(track_header.packing_mode),
-                data_size: track_header.data_size,
-            });
-
-            self.reader
-                .seek(SeekFrom::Current(track_header.data_size as i64))?;
-        }
-
-        Ok(dms_info)
-    }
-    pub fn info(&self) -> DMSInfo {
-        DMSInfo {
-            signature: String::from_utf8_lossy(&self.header.signature).to_string(),
-            version: self.header.version,
-            disk_type: self.header.disk_type,
-            compressed_size: self.header.compressed_size,
-            packing_mode: DMSPackingMode::from(self.header.packing_mode.clone()),
-            uncompressed_size: self.header.uncompressed_size,
-            track_count: self.header.track_count,
-            low_track: self.header.low_track,
-            high_track: self.header.high_track,
-            creation_date: self.header.creation_date,
-            creation_time: self.header.creation_time,
-            name: String::from_utf8_lossy(&self.header.name)
-                .trim_end_matches('\0')
-                .to_string(),
-        }
-    }
-
     fn read_header(reader: &mut R) -> io::Result<DMSHeader> {
         let mut signature = [0u8; 4];
         reader.read_exact(&mut signature)?;
-
         if &signature != b"DMS!" {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Invalid DMS signature",
             ));
         }
-
+        let mut header_type = [0u8; 4];
+        reader.read_exact(&mut header_type)?;
         Ok(DMSHeader {
             signature,
-            archive_header_len: reader.read_u32::<BigEndian>()?,
-            version: reader.read_u16::<BigEndian>()?,
-            disk_type: reader.read_u8()?,
-            packing_mode: DMSPackingMode::try_from(reader.read_u8()?)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
-            compressed_size: reader.read_u32::<BigEndian>()?,
-            uncompressed_size: reader.read_u32::<BigEndian>()?,
-            track_count: reader.read_u16::<BigEndian>()?,
-            flags: reader.read_u16::<BigEndian>()?,
+            header_type,
+            info_bits: reader.read_u32::<BigEndian>()?,
+            date: reader.read_u32::<BigEndian>()?,
             low_track: reader.read_u16::<BigEndian>()?,
             high_track: reader.read_u16::<BigEndian>()?,
-            creation_date: reader.read_u32::<BigEndian>()?,
-            creation_time: reader.read_u32::<BigEndian>()?,
-            name: {
-                let mut name = [0u8; 20];
-                reader.read_exact(&mut name)?;
-                name
-            },
+            packed_size: reader.read_u32::<BigEndian>()?,
+            unpacked_size: reader.read_u32::<BigEndian>()?,
+            os_version: reader.read_u16::<BigEndian>()?,
+            os_revision: reader.read_u16::<BigEndian>()?,
+            machine_cpu: reader.read_u16::<BigEndian>()?,
+            cpu_copro: reader.read_u16::<BigEndian>()?,
+            machine_type: reader.read_u16::<BigEndian>()?,
+            unused: reader.read_u16::<BigEndian>()?,
+            cpu_mhz: reader.read_u16::<BigEndian>()?,
+            time_create: reader.read_u32::<BigEndian>()?,
+            version_creator: reader.read_u16::<BigEndian>()?,
+            version_needed: reader.read_u16::<BigEndian>()?,
+            diskette_type: reader.read_u16::<BigEndian>()?,
+            compression_mode: reader.read_u16::<BigEndian>()?,
+            info_header_crc: reader.read_u16::<BigEndian>()?,
         })
+    }
+
+    pub fn info(&self) -> DMSInfo {
+        DMSInfo {
+            signature: String::from_utf8_lossy(&self.header.signature).to_string(),
+            header_type: String::from_utf8_lossy(&self.header.header_type).to_string(),
+            info_bits: self.header.info_bits,
+            date: self.header.date,
+            low_track: self.header.low_track,
+            high_track: self.header.high_track,
+            packed_size: self.header.packed_size,
+            unpacked_size: self.header.unpacked_size,
+            compression_mode: DMSPackingMode::from(self.header.compression_mode),
+        }
     }
 
     pub fn read_track(&mut self) -> io::Result<Vec<u8>> {
         let track_header = self.read_track_header()?;
-        let mut compressed_data = vec![0u8; track_header.data_size as usize];
+        let mut compressed_data = vec![0u8; track_header.pack_length as usize];
         self.reader.read_exact(&mut compressed_data)?;
-
-        let packing_mode = DMSPackingMode::from(track_header.packing_mode);
-        match packing_mode {
-            DMSPackingMode::None => {
-                return Ok(compressed_data);
-            }
-            DMSPackingMode::Simple => {
-                return self.unpack_rle(&compressed_data);
-            }
-            DMSPackingMode::Quick => {
-                return self.unpack_quick(&compressed_data);
-            }
-            DMSPackingMode::Medium => (),
-            DMSPackingMode::Deep => (),
-            DMSPackingMode::Heavy1 => (),
-            DMSPackingMode::Heavy2 => (),
+        match track_header.packing_mode {
+            DMSPackingMode::None => Ok(compressed_data),
+            DMSPackingMode::Simple => self.unpack_rle(&compressed_data),
+            DMSPackingMode::Quick => self.unpack_quick(&compressed_data),
+            _ => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Unsupported packing mode",
+            )),
         }
+    }
 
-        Ok(compressed_data)
+    fn read_track_header(&mut self) -> io::Result<DMSTrackHeader> {
+        let mut header_id = [0u8; 2];
+        self.reader.read_exact(&mut header_id)?;
+        if &header_id != b"TR" {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid track header ID",
+            ));
+        }
+        Ok(DMSTrackHeader {
+            header_id,
+            track_number: self.reader.read_u16::<BigEndian>()?,
+            unused1: self.reader.read_u16::<BigEndian>()?,
+            pack_length: self.reader.read_u16::<BigEndian>()?,
+            unused2: self.reader.read_u16::<BigEndian>()?,
+            unpack_length: self.reader.read_u16::<BigEndian>()?,
+            c_flag: self.reader.read_u8()?,
+            packing_mode: DMSPackingMode::from(self.reader.read_u8()? as u16),
+            u_sum: self.reader.read_u16::<BigEndian>()?,
+            d_crc: self.reader.read_u16::<BigEndian>()?,
+            h_crc: self.reader.read_u16::<BigEndian>()?,
+        })
     }
 
     fn unpack_rle(&self, input: &[u8]) -> io::Result<Vec<u8>> {
         let mut output = Vec::new();
         let mut i = 0;
-
         while i < input.len() {
             let a = input[i];
             i += 1;
-
             if a != 0x90 {
                 output.push(a);
             } else {
@@ -227,7 +225,6 @@ impl<R: Read + Seek> DMSReader<R> {
                 }
                 let b = input[i];
                 i += 1;
-
                 if b == 0 {
                     output.push(a);
                 } else {
@@ -239,7 +236,6 @@ impl<R: Read + Seek> DMSReader<R> {
                     }
                     let rep_char = input[i];
                     i += 1;
-
                     let rep_count = if b == 0xff {
                         if i + 1 >= input.len() {
                             return Err(io::Error::new(
@@ -253,21 +249,17 @@ impl<R: Read + Seek> DMSReader<R> {
                     } else {
                         b as usize
                     };
-
                     output.extend(std::iter::repeat(rep_char).take(rep_count));
                 }
             }
         }
-
         Ok(output)
     }
 
     fn unpack_quick(&mut self, input: &[u8]) -> io::Result<Vec<u8>> {
-        let mut output = Vec::new();
+        let mut output = Vec::with_capacity(11360);
         self.init_bit_buf(input);
-
         while output.len() < 11360 {
-            // Typical Amiga floppy track size
             if self.get_bits(1) != 0 {
                 self.drop_bits(1);
                 let byte = self.get_bits(8) as u8;
@@ -292,7 +284,6 @@ impl<R: Read + Seek> DMSReader<R> {
                 }
             }
         }
-
         self.quick_text_loc = self.quick_text_loc.wrapping_add(5) & QBITMASK;
         Ok(output)
     }
@@ -302,7 +293,7 @@ impl<R: Read + Seek> DMSReader<R> {
         self.bit_count = 32;
     }
 
-    fn get_bits(&mut self, n: u8) -> u32 {
+    fn get_bits(&self, n: u8) -> u32 {
         (self.bit_buffer >> (32 - n)) & ((1 << n) - 1)
     }
 
@@ -318,62 +309,28 @@ impl<R: Read + Seek> DMSReader<R> {
         }
     }
 
-    fn read_track_header(&mut self) -> io::Result<DMSTrackHeader> {
-        Ok(DMSTrackHeader {
-            id: self.reader.read_u16::<BigEndian>()?,
-            track_number: self.reader.read_u16::<BigEndian>()?,
-            flags: self.reader.read_u8()?,
-            packing_mode: self.reader.read_u8()?,
-            data_size: self.reader.read_u32::<BigEndian>()?,
-        })
-    }
-
-    pub fn read_u16(&mut self) -> io::Result<u16> {
-        let mut buf = [0u8; 2];
-        self.reader.read_exact(&mut buf)?;
-        Ok(u16::from_be_bytes(buf))
-    }
-
-    pub fn read_u32(&mut self) -> io::Result<u32> {
-        let mut buf = [0u8; 4];
-        self.reader.read_exact(&mut buf)?;
-        Ok(u32::from_be_bytes(buf))
-    }
-
-    pub fn read_u8(&mut self) -> io::Result<u8> {
-        let mut buf = [0u8; 1];
-        self.reader.read_exact(&mut buf)?;
-        Ok(buf[0])
-    }
-
     pub fn read_sector(&mut self, sector: usize) -> io::Result<Vec<u8>> {
         let track = sector / 16;
         let sector_in_track = sector % 16;
-
         for _ in 0..track {
             self.read_track()?;
         }
-
         let track_data = self.read_track()?;
-        let sector_data = track_data[sector_in_track * 256..(sector_in_track + 1) * 256].to_vec();
-        Ok(sector_data)
+        Ok(track_data[sector_in_track * 256..(sector_in_track + 1) * 256].to_vec())
     }
 }
 
 pub fn dms_to_adf<R: Read + Seek, W: Write>(reader: R, writer: &mut W) -> io::Result<()> {
     let mut dms_reader = DMSReader::new(reader)?;
-
-    for _ in 0..dms_reader.header.track_count {
+    for _ in 0..dms_reader.header.high_track - dms_reader.header.low_track + 1 {
         let track_data = dms_reader.read_track()?;
         writer.write_all(&track_data)?;
     }
-
     Ok(())
 }
 
 pub fn convert_dms_to_adf(dms_path: &str, adf_path: &str) -> io::Result<()> {
     let dms_file = File::open(dms_path)?;
     let mut adf_file = File::create(adf_path)?;
-
     dms_to_adf(dms_file, &mut adf_file)
 }
