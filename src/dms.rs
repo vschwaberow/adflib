@@ -8,12 +8,14 @@ use std::fs::File;
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-const DMS_HEADER_SIZE: usize = 56;
-const DMS_TRACK_HEADER_SIZE: usize = 20;
-const QBITMASK: u16 = 255;
-const QUICK_UNPACK_SIZE: usize = 11360;
+const DMS_HEADER_SIZE_BYTES: usize = 56;
+const DMS_TRACK_HEADER_SIZE_BYTES: usize = 20;
+const QUICK_TEXT_MASK: u16 = 255;
+const QUICK_UNPACK_SIZE_BYTES: usize = 11360;
 const SECTORS_PER_TRACK: usize = 16;
 const BYTES_PER_SECTOR: usize = 256;
+const BITS_COUNT: u8 = 32;
+const BIT_BUFFER_REFILL_THRESHOLD: u8 = 24;
 
 #[derive(Debug, Clone)]
 pub struct DMSHeader {
@@ -282,7 +284,7 @@ impl<R: Read + Seek> DMSReader<R> {
         let mut output = Vec::new();
         self.init_bit_buf(input);
 
-        while output.len() < QUICK_UNPACK_SIZE {
+        while output.len() < QUICK_UNPACK_SIZE_BYTES {
             if self.get_bits(1) != 0 {
                 self.drop_bits(1);
                 let byte = self.get_bits(8) as u8;
@@ -326,11 +328,11 @@ impl<R: Read + Seek> DMSReader<R> {
     fn drop_bits(&mut self, n: u8) {
         self.bit_buffer <<= n;
         self.bit_count -= n;
-        if self.bit_count <= 24 {
+        if self.bit_count <= BIT_BUFFER_REFILL_THRESHOLD {
             let mut next_byte = [0u8; 1];
             if self.reader.read_exact(&mut next_byte).is_ok() {
                 self.bit_buffer |= (next_byte[0] as u32) << (24 - self.bit_count);
-                self.bit_count += 8;
+                self.bit_count += BITS_COUNT;
             }
         }
     }
