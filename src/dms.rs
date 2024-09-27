@@ -11,6 +11,7 @@ use std::path::Path;
 const DMS_HEADER_SIZE: usize = 56;
 const DMS_TRACK_HEADER_SIZE: usize = 20;
 const QBITMASK: u16 = 255;
+const QUICK_UNPACK_SIZE: usize = 11360;
 
 #[derive(Debug, Clone)]
 pub struct DMSHeader {
@@ -258,34 +259,35 @@ impl<R: Read + Seek> DMSReader<R> {
     }
 
     fn unpack_quick(&mut self, input: &[u8]) -> io::Result<Vec<u8>> {
-        let mut output = Vec::with_capacity(11360);
+        let mut output = Vec::new();
         self.init_bit_buf(input);
-        while output.len() < 11360 {
+        
+        while output.len() < QUICK_UNPACK_SIZE {
             if self.get_bits(1) != 0 {
                 self.drop_bits(1);
                 let byte = self.get_bits(8) as u8;
                 self.drop_bits(8);
-                self.text[self.quick_text_loc as usize & QBITMASK as usize] = byte;
+                self.text[self.quick_text_loc as usize & 255] = byte;
                 self.quick_text_loc = self.quick_text_loc.wrapping_add(1);
                 output.push(byte);
             } else {
                 self.drop_bits(1);
                 let j = self.get_bits(2) as usize + 2;
                 self.drop_bits(2);
-                let i = self
-                    .quick_text_loc
-                    .wrapping_sub(self.get_bits(8) as u16)
-                    .wrapping_sub(1);
+                let i = self.quick_text_loc.wrapping_sub(self.get_bits(8) as u16).wrapping_sub(1);
                 self.drop_bits(8);
+                
+                output.reserve(j);
                 for _ in 0..j {
-                    let byte = self.text[i as usize & QBITMASK as usize];
-                    self.text[self.quick_text_loc as usize & QBITMASK as usize] = byte;
+                    let byte = self.text[i as usize & 255];
+                    self.text[self.quick_text_loc as usize & 255] = byte;
                     self.quick_text_loc = self.quick_text_loc.wrapping_add(1);
                     output.push(byte);
                 }
             }
         }
-        self.quick_text_loc = self.quick_text_loc.wrapping_add(5) & QBITMASK;
+        
+        self.quick_text_loc = (self.quick_text_loc.wrapping_add(5)) & 255;
         Ok(output)
     }
 
