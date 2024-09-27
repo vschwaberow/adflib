@@ -12,6 +12,8 @@ const DMS_HEADER_SIZE: usize = 56;
 const DMS_TRACK_HEADER_SIZE: usize = 20;
 const QBITMASK: u16 = 255;
 const QUICK_UNPACK_SIZE: usize = 11360;
+const SECTORS_PER_TRACK: usize = 16;
+const BYTES_PER_SECTOR: usize = 256;
 
 #[derive(Debug, Clone)]
 pub struct DMSHeader {
@@ -334,13 +336,15 @@ impl<R: Read + Seek> DMSReader<R> {
     }
 
     pub fn read_sector(&mut self, sector: usize) -> io::Result<Vec<u8>> {
-        let track = sector / 16;
-        let sector_in_track = sector % 16;
+        let track = sector / SECTORS_PER_TRACK;
+        let sector_in_track = sector % SECTORS_PER_TRACK;
         for _ in 0..track {
             self.read_track()?;
         }
         let track_data = self.read_track()?;
-        Ok(track_data[sector_in_track * 256..(sector_in_track + 1) * 256].to_vec())
+        let start = sector_in_track * BYTES_PER_SECTOR;
+        let end = start + BYTES_PER_SECTOR;
+        Ok(track_data[start..end].to_vec())
     }
 }
 
