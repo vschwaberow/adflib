@@ -261,7 +261,7 @@ impl<R: Read + Seek> DMSReader<R> {
     fn unpack_quick(&mut self, input: &[u8]) -> io::Result<Vec<u8>> {
         let mut output = Vec::new();
         self.init_bit_buf(input);
-        
+
         while output.len() < QUICK_UNPACK_SIZE {
             if self.get_bits(1) != 0 {
                 self.drop_bits(1);
@@ -274,9 +274,12 @@ impl<R: Read + Seek> DMSReader<R> {
                 self.drop_bits(1);
                 let j = self.get_bits(2) as usize + 2;
                 self.drop_bits(2);
-                let i = self.quick_text_loc.wrapping_sub(self.get_bits(8) as u16).wrapping_sub(1);
+                let i = self
+                    .quick_text_loc
+                    .wrapping_sub(self.get_bits(8) as u16)
+                    .wrapping_sub(1);
                 self.drop_bits(8);
-                
+
                 output.reserve(j);
                 for _ in 0..j {
                     let byte = self.text[i as usize & 255];
@@ -286,7 +289,7 @@ impl<R: Read + Seek> DMSReader<R> {
                 }
             }
         }
-        
+
         self.quick_text_loc = (self.quick_text_loc.wrapping_add(5)) & 255;
         Ok(output)
     }
