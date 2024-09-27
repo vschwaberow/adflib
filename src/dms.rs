@@ -49,6 +49,7 @@ pub enum DMSPackingMode {
     Heavy3,
     Heavy4,
     Heavy5,
+    Unsupported,
 }
 
 impl From<u16> for DMSPackingMode {
@@ -64,7 +65,7 @@ impl From<u16> for DMSPackingMode {
             7 => DMSPackingMode::Heavy3,
             8 => DMSPackingMode::Heavy4,
             9 => DMSPackingMode::Heavy5,
-            _ => DMSPackingMode::None,
+            _ => DMSPackingMode::Unsupported,
         }
     }
 }
