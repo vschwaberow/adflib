@@ -108,6 +108,24 @@ pub struct DMSReader<R: Read + Seek> {
     text: [u8; 256],
 }
 
+impl std::fmt::Display for DMSPackingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DMSPackingMode::None => write!(f, "None"),
+            DMSPackingMode::Simple => write!(f, "Simple"),
+            DMSPackingMode::Quick => write!(f, "Quick"),
+            DMSPackingMode::Medium => write!(f, "Medium"),
+            DMSPackingMode::Deep => write!(f, "Deep"),
+            DMSPackingMode::Heavy1 => write!(f, "Heavy1"),
+            DMSPackingMode::Heavy2 => write!(f, "Heavy2"),
+            DMSPackingMode::Heavy3 => write!(f, "Heavy3"),
+            DMSPackingMode::Heavy4 => write!(f, "Heavy4"),
+            DMSPackingMode::Heavy5 => write!(f, "Heavy5"),
+            DMSPackingMode::Unsupported => write!(f, "Unsupported"),
+        }
+    }
+}
+
 impl<R: Read + Seek> DMSReader<R> {
     pub fn new(mut reader: R) -> io::Result<Self> {
         let header = Self::read_header(&mut reader)?;
