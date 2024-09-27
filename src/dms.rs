@@ -5,7 +5,8 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, BufReader, Read, Seek, SeekFrom, Write};
+use std::path::Path;
 
 const DMS_HEADER_SIZE: usize = 56;
 const DMS_TRACK_HEADER_SIZE: usize = 20;
@@ -26,6 +27,7 @@ pub struct DMSHeader {
     pub creation_date: u32,
     pub creation_time: u32,
     pub name: [u8; 20],
+    pub packing_mode: DMSPackingMode,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +57,29 @@ impl From<u8> for DMSPackingMode {
 }
 
 #[derive(Debug, Clone)]
+pub struct DMSInfo {
+    pub signature: String,
+    pub version: u16,
+    pub disk_type: u8,
+    pub compressed_size: u32,
+    pub uncompressed_size: u32,
+    pub track_count: u16,
+    pub low_track: u16,
+    pub high_track: u16,
+    pub creation_date: u32,
+    pub creation_time: u32,
+    pub name: String,
+    pub packing_mode: DMSPackingMode,
+}
+
+#[derive(Debug)]
+pub struct TrackInfo {
+    pub number: u16,
+    pub packing_mode: DMSPackingMode,
+    pub data_size: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct DMSTrackHeader {
     pub id: u16,
     pub track_number: u16,
@@ -64,7 +89,7 @@ pub struct DMSTrackHeader {
 }
 
 #[derive(Debug, Clone)]
-pub struct DMSReader<R: Read> {
+pub struct DMSReader<R: Read + Seek> {
     reader: R,
     header: DMSHeader,
     bit_buffer: u32,
@@ -73,7 +98,7 @@ pub struct DMSReader<R: Read> {
     text: [u8; 256],
 }
 
-impl<R: Read> DMSReader<R> {
+impl<R: Read + Seek> DMSReader<R> {
     pub fn new(mut reader: R) -> io::Result<Self> {
         let header = Self::read_header(&mut reader)?;
         Ok(Self {
@@ -84,6 +109,44 @@ impl<R: Read> DMSReader<R> {
             quick_text_loc: 0,
             text: [0; 256],
         })
+    }
+
+    pub fn load_disk_info(&mut self) -> io::Result<DMSInfo> {
+        let dms_info = self.info();
+        let mut tracks = Vec::new();
+        self.reader.seek(SeekFrom::Start(DMS_HEADER_SIZE as u64))?;
+
+        for _ in 0..dms_info.track_count {
+            let track_header = self.read_track_header()?;
+            tracks.push(TrackInfo {
+                number: track_header.track_number,
+                packing_mode: DMSPackingMode::from(track_header.packing_mode),
+                data_size: track_header.data_size,
+            });
+
+            self.reader
+                .seek(SeekFrom::Current(track_header.data_size as i64))?;
+        }
+
+        Ok(dms_info)
+    }
+    pub fn info(&self) -> DMSInfo {
+        DMSInfo {
+            signature: String::from_utf8_lossy(&self.header.signature).to_string(),
+            version: self.header.version,
+            disk_type: self.header.disk_type,
+            compressed_size: self.header.compressed_size,
+            packing_mode: DMSPackingMode::from(self.header.packing_mode.clone()),
+            uncompressed_size: self.header.uncompressed_size,
+            track_count: self.header.track_count,
+            low_track: self.header.low_track,
+            high_track: self.header.high_track,
+            creation_date: self.header.creation_date,
+            creation_time: self.header.creation_time,
+            name: String::from_utf8_lossy(&self.header.name)
+                .trim_end_matches('\0')
+                .to_string(),
+        }
     }
 
     fn read_header(reader: &mut R) -> io::Result<DMSHeader> {
@@ -102,6 +165,8 @@ impl<R: Read> DMSReader<R> {
             archive_header_len: reader.read_u32::<BigEndian>()?,
             version: reader.read_u16::<BigEndian>()?,
             disk_type: reader.read_u8()?,
+            packing_mode: DMSPackingMode::try_from(reader.read_u8()?)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
             compressed_size: reader.read_u32::<BigEndian>()?,
             uncompressed_size: reader.read_u32::<BigEndian>()?,
             track_count: reader.read_u16::<BigEndian>()?,
@@ -295,7 +360,7 @@ impl<R: Read> DMSReader<R> {
     }
 }
 
-pub fn dms_to_adf<R: Read, W: Write>(reader: R, writer: &mut W) -> io::Result<()> {
+pub fn dms_to_adf<R: Read + Seek, W: Write>(reader: R, writer: &mut W) -> io::Result<()> {
     let mut dms_reader = DMSReader::new(reader)?;
 
     for _ in 0..dms_reader.header.track_count {
