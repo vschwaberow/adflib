@@ -5,8 +5,8 @@ mod tests {
         format_creation_date, load_adf_from_zip, DiskType, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS,
         ADF_SECTOR_SIZE, ADF_TRACK_SIZE, ROOT_BLOCK,
     };
-    use crate::dms::DMSReader;
-    use std::io::Cursor;
+    use crate::dms::{DMSPackingMode, DMSReader};
+    use std::io::{self, Cursor};
     use std::{
         io::Write,
         time::{SystemTime, UNIX_EPOCH},
@@ -137,11 +137,34 @@ mod tests {
     }
 
     #[test]
+    fn test_dms_header_reading() {
+        let input = vec![
+            b'D', b'M', b'S', b'!', b'P', b'R', b'O', b' ', 0, 0, 0, 1, // info_bits
+            0, 0, 0, 2, 0, 0, 0, 79, 0, 0, 0, 3, 0, 0, 0, 4, 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0,
+            7, 0, 0, 0, 8, 0, 9, 0, 10, 0, 11, 0, 2, 0, 12,
+        ];
+
+        let reader = DMSReader::new(Cursor::new(input)).unwrap();
+        let info = reader.info();
+
+        assert_eq!(info.signature, "DMS!");
+        assert_eq!(info.header_type, "PRO ");
+        assert_eq!(info.info_bits, 1);
+        assert_eq!(info.date, 2);
+        assert_eq!(info.low_track, 0);
+        assert_eq!(info.high_track, 79);
+        assert_eq!(info.packed_size, 3);
+        assert_eq!(info.unpacked_size, 4);
+        assert!(matches!(info.compression_mode, DMSPackingMode::Quick));
+    }
+
+    #[test]
     fn test_dms_none_mode() {
         let input = vec![
-            b'D', b'M', b'S', b'!', 0, 0, 0, 56, 0, 1, 0, 0, 0, 0, 100, 0, 0, 0, 100, 0, 1, 0, 0,
+            b'D', b'M', b'S', b'!', b'P', b'R', b'O', b' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 79, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 5, 1, 2, 3, 4, 5,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b'T', b'R', 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0,
+            0, 0, 0, 1, 2, 3, 4, 5,
         ];
 
         let mut reader = DMSReader::new(Cursor::new(input)).unwrap();
@@ -152,9 +175,10 @@ mod tests {
     #[test]
     fn test_dms_simple_mode() {
         let input = vec![
-            b'D', b'M', b'S', b'!', 0, 0, 0, 56, 0, 1, 0, 0, 0, 0, 100, 0, 0, 0, 100, 0, 1, 0, 0,
+            b'D', b'M', b'S', b'!', b'P', b'R', b'O', b' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 79, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 7, 1, 2, 0x90, 3, 65, 3, 4,
+            0, 0, 0, 0, 0, 0, 0, 1, 0, 0, b'T', b'R', 0, 0, 0, 0, 0, 7, 0, 0, 0, 7, 0, 1, 0, 0, 0,
+            0, 0, 0, 1, 2, 0x90, 3, 65, 3, 4,
         ];
 
         let mut reader = DMSReader::new(Cursor::new(input)).unwrap();
@@ -165,15 +189,46 @@ mod tests {
     #[test]
     fn test_dms_quick_mode() {
         let input = vec![
-            b'D', b'M', b'S', b'!', 0, 0, 0, 56, 0, 1, 0, 0, 0, 0, 100, 0, 0, 0, 100, 0, 1, 0, 0,
+            b'D', b'M', b'S', b'!', b'P', b'R', b'O', b' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 79, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 8, 0b10101010, 0b10101010, 0b10101010, 0b10101010,
-            0b10101010, 0b10101010, 0b10101010, 0b10101010,
+            0, 0, 0, 0, 0, 0, 0, 2, 0, 0, b'T', b'R', 0, 0, 0, 0, 0x2C, 0x60, 0, 0, 0x2C, 0x60, 0,
+            2, 0, 0, 0, 0, 0, 0, 0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b10101010,
+            0b10101010, 0b10101010, 0b10101010,
         ];
 
         let mut reader = DMSReader::new(Cursor::new(input)).unwrap();
         let track_data = reader.read_track().unwrap();
         assert_eq!(track_data.len(), 11360);
         assert_eq!(&track_data[0..4], &[0xAA, 0xAA, 0xAA, 0xAA]);
+    }
+
+    #[test]
+    fn test_unsupported_packing_mode() {
+        let input = vec![
+            b'D', b'M', b'S', b'!', b'P', b'R', b'O', b' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 79, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 3, 0, 0, b'T', b'R', 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 3, 0, 0, 0,
+            0, 0, 0, 1, 2, 3, 4, 5,
+        ];
+
+        let mut reader = DMSReader::new(Cursor::new(input)).unwrap();
+        let result = reader.read_track();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn test_invalid_track_header() {
+        let input = vec![
+            b'D', b'M', b'S', b'!', b'P', b'R', b'O', b' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 79, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b'X', b'X', 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0,
+            0, 0, 0, 1, 2, 3, 4, 5,
+        ];
+
+        let mut reader = DMSReader::new(Cursor::new(input)).unwrap();
+        let result = reader.read_track();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
     }
 }
