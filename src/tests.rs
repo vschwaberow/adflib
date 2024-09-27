@@ -5,6 +5,8 @@ mod tests {
         format_creation_date, load_adf_from_zip, DiskType, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS,
         ADF_SECTOR_SIZE, ADF_TRACK_SIZE, ROOT_BLOCK,
     };
+    use crate::dms::DMSReader;
+    use std::io::Cursor;
     use std::{
         io::Write,
         time::{SystemTime, UNIX_EPOCH},
@@ -132,5 +134,46 @@ mod tests {
 
         let adf = load_adf_from_zip(&zip_buffer, "test.adf").unwrap();
         assert_eq!(adf.data.len(), ADF_TRACK_SIZE * ADF_NUM_TRACKS);
+    }
+
+    #[test]
+    fn test_dms_none_mode() {
+        let input = vec![
+            b'D', b'M', b'S', b'!', 0, 0, 0, 56, 0, 1, 0, 0, 0, 0, 100, 0, 0, 0, 100, 0, 1, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 5, 1, 2, 3, 4, 5,
+        ];
+
+        let mut reader = DMSReader::new(Cursor::new(input)).unwrap();
+        let track_data = reader.read_track().unwrap();
+        assert_eq!(track_data, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_dms_simple_mode() {
+        let input = vec![
+            b'D', b'M', b'S', b'!', 0, 0, 0, 56, 0, 1, 0, 0, 0, 0, 100, 0, 0, 0, 100, 0, 1, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 7, 1, 2, 0x90, 3, 65, 3, 4,
+        ];
+
+        let mut reader = DMSReader::new(Cursor::new(input)).unwrap();
+        let track_data = reader.read_track().unwrap();
+        assert_eq!(track_data, vec![1, 2, 65, 65, 65, 3, 4]);
+    }
+
+    #[test]
+    fn test_dms_quick_mode() {
+        let input = vec![
+            b'D', b'M', b'S', b'!', 0, 0, 0, 56, 0, 1, 0, 0, 0, 0, 100, 0, 0, 0, 100, 0, 1, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 8, 0b10101010, 0b10101010, 0b10101010, 0b10101010,
+            0b10101010, 0b10101010, 0b10101010, 0b10101010,
+        ];
+
+        let mut reader = DMSReader::new(Cursor::new(input)).unwrap();
+        let track_data = reader.read_track().unwrap();
+        assert_eq!(track_data.len(), 11360);
+        assert_eq!(&track_data[0..4], &[0xAA, 0xAA, 0xAA, 0xAA]);
     }
 }
