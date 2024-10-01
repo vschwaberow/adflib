@@ -440,14 +440,14 @@ impl ADF {
 
     pub fn format_protection_flags(&self, flags: u32) -> String {
         let mut result = String::with_capacity(8);
-        result.push(if flags & 0x80 == 0 { 'h' } else { '-' }); // hidden
-        result.push(if flags & 0x40 == 0 { 's' } else { '-' }); // script
-        result.push(if flags & 0x20 == 0 { 'p' } else { '-' }); // pure
-        result.push(if flags & 0x10 == 0 { 'a' } else { '-' }); // archive
-        result.push(if flags & 0x08 == 0 { 'r' } else { '-' }); // read
-        result.push(if flags & 0x04 == 0 { 'w' } else { '-' }); // write
-        result.push(if flags & 0x02 == 0 { 'e' } else { '-' }); // execute
-        result.push(if flags & 0x01 == 0 { 'd' } else { '-' }); // delete
+        result.push(if flags & 0x80 == 0 { 'h' } else { '-' });
+        result.push(if flags & 0x40 == 0 { 's' } else { '-' });
+        result.push(if flags & 0x20 == 0 { 'p' } else { '-' });
+        result.push(if flags & 0x10 == 0 { 'a' } else { '-' });
+        result.push(if flags & 0x08 == 0 { 'r' } else { '-' });
+        result.push(if flags & 0x04 == 0 { 'w' } else { '-' });
+        result.push(if flags & 0x02 == 0 { 'e' } else { '-' });
+        result.push(if flags & 0x01 == 0 { 'd' } else { '-' });
         result
     }
 
@@ -499,7 +499,7 @@ impl ADF {
     pub fn initialize_bitmap(&mut self) -> Result<()> {
         let bitmap_block_index = ROOT_BLOCK + 1;
         let mut bitmap_block = vec![0u8; ADF_SECTOR_SIZE];
-        bitmap_block[0] = 0; // bm_flag
+        bitmap_block[0] = 0;
         bitmap_block[1] = 0;
         let checksum_offset = 20;
         let checksum = self.calculate_checksum(&bitmap_block[checksum_offset..]);
@@ -840,7 +840,6 @@ impl ADF {
 
         self.write_sector(dir_block, &dir_data)?;
 
-        // Update root block
         self.update_entry_in_directory(ROOT_BLOCK, old_name, new_name)?;
 
         Ok(())
