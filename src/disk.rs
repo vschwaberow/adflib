@@ -764,4 +764,171 @@ impl ADF {
         file.read_to_string(&mut contents)?;
         Self::from_json(&contents)
     }
+
+    pub fn create_directory(&mut self, name: &str) -> io::Result<()> {
+        let new_dir_block = self.allocate_block()?;
+        let root_block = self.read_sector(ROOT_BLOCK);
+
+        let mut new_dir_data = [0u8; ADF_SECTOR_SIZE];
+        new_dir_data[0] = 2;
+        new_dir_data[ADF_SECTOR_SIZE - 4] = root_block[ADF_SECTOR_SIZE - 4];
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
+        new_dir_data[ADF_SECTOR_SIZE - 92..ADF_SECTOR_SIZE - 88].copy_from_slice(&days);
+        new_dir_data[ADF_SECTOR_SIZE - 88..ADF_SECTOR_SIZE - 84].copy_from_slice(&mins);
+        new_dir_data[ADF_SECTOR_SIZE - 84..ADF_SECTOR_SIZE - 80].copy_from_slice(&ticks);
+
+        let name_bytes = name.as_bytes();
+        let name_len = std::cmp::min(name_bytes.len(), 30);
+        new_dir_data[ADF_SECTOR_SIZE - 80] = name_len as u8;
+        new_dir_data[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len]
+            .copy_from_slice(&name_bytes[..name_len]);
+
+        self.write_sector(new_dir_block, &new_dir_data)?;
+
+        self.add_entry_to_directory(ROOT_BLOCK, new_dir_block as u32, name)?;
+
+        Ok(())
+    }
+
+    pub fn delete_directory(&mut self, name: &str) -> io::Result<()> {
+        let dir_block = self.find_file_header_block(ROOT_BLOCK, name)?;
+        let dir_data = self.read_sector(dir_block);
+
+        if dir_data[0] != 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Not a directory",
+            ));
+        }
+
+        if self.list_directory(dir_block).next().is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Directory is not empty",
+            ));
+        }
+
+        self.remove_entry_from_directory(ROOT_BLOCK, name)?;
+        self.set_block_free(dir_block);
+        self.update_bitmap_blocks()?;
+
+        Ok(())
+    }
+
+    pub fn rename_directory(&mut self, old_name: &str, new_name: &str) -> io::Result<()> {
+        let dir_block = self.find_file_header_block(ROOT_BLOCK, old_name)?;
+        let mut dir_data = self.read_sector(dir_block).to_vec();
+
+        if dir_data[0] != 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Not a directory",
+            ));
+        }
+
+        let name_bytes = new_name.as_bytes();
+        let name_len = std::cmp::min(name_bytes.len(), 30);
+        dir_data[ADF_SECTOR_SIZE - 80] = name_len as u8;
+        dir_data[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len]
+            .copy_from_slice(&name_bytes[..name_len]);
+
+        self.write_sector(dir_block, &dir_data)?;
+
+        // Update root block
+        self.update_entry_in_directory(ROOT_BLOCK, old_name, new_name)?;
+
+        Ok(())
+    }
+
+    fn add_entry_to_directory(
+        &mut self,
+        dir_block: usize,
+        entry_block: u32,
+        name: &str,
+    ) -> io::Result<()> {
+        let mut dir_data = self.read_sector(dir_block).to_vec();
+
+        for i in (24..=51).rev() {
+            if u32::from_be_bytes([
+                dir_data[i * 4],
+                dir_data[i * 4 + 1],
+                dir_data[i * 4 + 2],
+                dir_data[i * 4 + 3],
+            ]) == 0
+            {
+                dir_data[i * 4..i * 4 + 4].copy_from_slice(&entry_block.to_be_bytes());
+                self.write_sector(dir_block, &dir_data)?;
+                return Ok(());
+            }
+        }
+
+        Err(io::Error::new(io::ErrorKind::Other, "Directory is full"))
+    }
+
+    fn remove_entry_from_directory(&mut self, dir_block: usize, name: &str) -> io::Result<()> {
+        let mut dir_data = self.read_sector(dir_block).to_vec();
+
+        for i in (24..=51).rev() {
+            let entry_block = u32::from_be_bytes([
+                dir_data[i * 4],
+                dir_data[i * 4 + 1],
+                dir_data[i * 4 + 2],
+                dir_data[i * 4 + 3],
+            ]);
+            if entry_block != 0 {
+                let entry_data = self.read_sector(entry_block as usize);
+                let entry_name_len = entry_data[432] as usize;
+                let entry_name =
+                    String::from_utf8_lossy(&entry_data[433..433 + entry_name_len]).to_string();
+                if entry_name == name {
+                    dir_data[i * 4..i * 4 + 4].copy_from_slice(&0u32.to_be_bytes());
+                    self.write_sector(dir_block, &dir_data)?;
+                    return Ok(());
+                }
+            }
+        }
+
+        Err(io::Error::new(io::ErrorKind::NotFound, "Entry not found"))
+    }
+
+    fn update_entry_in_directory(
+        &mut self,
+        dir_block: usize,
+        old_name: &str,
+        new_name: &str,
+    ) -> io::Result<()> {
+        let dir_data = self.read_sector(dir_block);
+
+        for i in (24..=51).rev() {
+            let entry_block = u32::from_be_bytes([
+                dir_data[i * 4],
+                dir_data[i * 4 + 1],
+                dir_data[i * 4 + 2],
+                dir_data[i * 4 + 3],
+            ]);
+            if entry_block != 0 {
+                let mut entry_data = self.read_sector(entry_block as usize).to_vec();
+                let entry_name_len = entry_data[432] as usize;
+                let entry_name =
+                    String::from_utf8_lossy(&entry_data[433..433 + entry_name_len]).to_string();
+                if entry_name == old_name {
+                    let new_name_bytes = new_name.as_bytes();
+                    let new_name_len = std::cmp::min(new_name_bytes.len(), 30);
+                    entry_data[432] = new_name_len as u8;
+                    entry_data[433..433 + new_name_len]
+                        .copy_from_slice(&new_name_bytes[..new_name_len]);
+                    self.write_sector(entry_block as usize, &entry_data)?;
+                    return Ok(());
+                }
+            }
+        }
+
+        Err(io::Error::new(io::ErrorKind::NotFound, "Entry not found"))
+    }
 }
