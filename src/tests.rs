@@ -133,4 +133,73 @@ mod tests {
         let adf = load_adf_from_zip(&zip_buffer, "test.adf").unwrap();
         assert_eq!(adf.data.len(), ADF_TRACK_SIZE * ADF_NUM_TRACKS);
     }
+
+    fn create_test_adf() -> ADF {
+        let mut adf = ADF::new(ADF_NUM_SECTORS, ADF_SECTOR_SIZE);
+        adf.format(DiskType::FFS, "TestDisk").unwrap();
+        adf
+    }
+
+    #[test]
+    fn test_create_directory() {
+        let mut adf = create_test_adf();
+
+        adf.create_directory("TestDir").unwrap();
+
+        let root_files = adf.list_root_directory().unwrap();
+        let test_dir = root_files.iter().find(|f| f.name == "TestDir" && f.is_dir);
+        assert!(test_dir.is_some(), "TestDir not found in root directory");
+    }
+
+    #[test]
+    fn test_rename_directory() {
+        let mut adf = create_test_adf();
+
+        adf.create_directory("OldDir").unwrap();
+        adf.rename_directory("OldDir", "NewDir").unwrap();
+
+        let root_files = adf.list_root_directory().unwrap();
+        let old_dir = root_files.iter().find(|f| f.name == "OldDir");
+        let new_dir = root_files.iter().find(|f| f.name == "NewDir" && f.is_dir);
+
+        assert!(old_dir.is_none(), "OldDir still exists");
+        assert!(new_dir.is_some(), "NewDir not found in root directory");
+    }
+
+    #[test]
+    fn test_delete_directory() {
+        let mut adf = create_test_adf();
+
+        adf.create_directory("DeleteMe").unwrap();
+        adf.delete_directory("DeleteMe").unwrap();
+
+        let root_files = adf.list_root_directory().unwrap();
+        let deleted_dir = root_files.iter().find(|f| f.name == "DeleteMe");
+
+        assert!(deleted_dir.is_none(), "DeleteMe directory still exists");
+    }
+
+    #[test]
+    fn test_delete_non_empty_directory() {
+        let mut adf = create_test_adf();
+
+        adf.create_directory("ParentDir").unwrap();
+        adf.create_directory("ParentDir/ChildDir").unwrap();
+
+        let result = adf.delete_directory("ParentDir");
+
+        assert!(result.is_err(), "Deleting non-empty directory should fail");
+    }
+
+    #[test]
+    fn test_rename_non_existent_directory() {
+        let mut adf = create_test_adf();
+
+        let result = adf.rename_directory("NonExistent", "NewName");
+
+        assert!(
+            result.is_err(),
+            "Renaming non-existent directory should fail"
+        );
+    }
 }
