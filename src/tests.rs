@@ -136,7 +136,6 @@ mod tests {
         assert_eq!(adf.data.len(), ADF_TRACK_SIZE * ADF_NUM_TRACKS);
     }
 
-
     #[test]
     fn test_dms_header_reading() {
         let input = vec![
@@ -231,6 +230,7 @@ mod tests {
         let result = reader.read_track();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
+    }
 
     fn create_test_adf() -> ADF {
         let mut adf = ADF::new(ADF_NUM_SECTORS, ADF_SECTOR_SIZE);
@@ -299,6 +299,5 @@ mod tests {
             result.is_err(),
             "Renaming non-existent directory should fail"
         );
-
     }
 }
