@@ -6,11 +6,22 @@
 use adflib::disk::{
     BitmapInfo, DiskInfo, DiskType, FileInfo, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS, ADF_TRACK_SIZE,
 };
+use adflib::dms::{convert_dms_to_adf, DMSInfo, DMSReader};
 use chrono::{DateTime, Utc};
 use clap::{Arg, Command};
 use std::fs::File;
 use std::io::Write;
 use std::time::UNIX_EPOCH;
+
+fn print_dms_info(info: &DMSInfo, file_path: &str) {
+    println!("DMS Information for: {}", file_path);
+    println!("------------------------");
+    println!("Signature: {}", info.signature);
+    println!("Header Type: {}", info.header_type);
+    println!("Info bits: {:#010x}", info.info_bits);
+    println!("Date: {}", info.date);
+    println!("Compression: {}", info.compression_mode);
+}
 
 fn print_disk_info(info: &DiskInfo, file_path: &str) {
     println!("ADF Information for: {}", file_path);
@@ -193,6 +204,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ),
         )
         .subcommand(
+            Command::new("dms")
+                .about("Performs operations on DMS files")
+                .subcommand(
+                    Command::new("info")
+                        .about("Displays information about a DMS file")
+                        .arg(
+                            Arg::new("FILE")
+                                .required(true)
+                                .help("The DMS file to analyze"),
+                        ),
+                )
+                .subcommand(
+                    Command::new("convert")
+                        .about("Converts a DMS file to an ADF file")
+                        .arg(
+                            Arg::new("INPUT")
+                                .required(true)
+                                .help("The DMS file to convert"),
+                        )
+                        .arg(
+                            Arg::new("OUTPUT")
+                                .required(true)
+                                .help("The output ADF file"),
+                        ),
+                ),
+        )
+        .subcommand(
             Command::new("create")
                 .about("Creates a new empty ADF file")
                 .arg(
@@ -285,6 +323,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let info = adf.information()?;
             print_disk_info(&info, file_path);
         }
+        Some(("dms", dms_matches)) => match dms_matches.subcommand() {
+            Some(("info", info_matches)) => {
+                let file_path = info_matches.get_one::<String>("FILE").unwrap();
+                let file = File::open(file_path)?;
+                let mut reader = std::io::BufReader::new(file);
+                let dms_reader = DMSReader::new(&mut reader)?;
+                let dms_info = dms_reader.info();
+                print_dms_info(&dms_info, file_path);
+            }
+            Some(("convert", convert_matches)) => {
+                let input_path = convert_matches.get_one::<String>("INPUT").unwrap();
+                let output_path = convert_matches.get_one::<String>("OUTPUT").unwrap();
+                convert_dms_to_adf(input_path, output_path)?;
+                println!("Successfully converted {} to {}", input_path, output_path);
+            }
+            _ => unreachable!("Exhaustive subcommand matching should prevent this"),
+        },
         Some(("bitmap", sub_matches)) => match sub_matches.subcommand() {
             Some(("info", info_matches)) => {
                 let file_path = info_matches.get_one::<String>("FILE").unwrap();
