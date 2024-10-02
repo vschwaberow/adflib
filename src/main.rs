@@ -200,8 +200,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .required(true)
                         .help("The ADF file to create"),
                 ),
+        )
+        .subcommand(
+            Command::new("mkdir")
+                .about("Creates a new directory in the ADF file")
+                .arg(
+                    Arg::new("FILE")
+                        .required(true)
+                        .help("The ADF file to modify"),
+                )
+                .arg(Arg::new("DIR_PATH").required(true).help(
+                    "The path of the directory to create (e.g., 'NewDir' or 'ParentDir/NewDir')",
+                )),
+        )
+        .subcommand(
+            Command::new("rmdir")
+                .about("Removes a directory from the ADF file")
+                .arg(
+                    Arg::new("FILE")
+                        .required(true)
+                        .help("The ADF file to modify"),
+                )
+                .arg(Arg::new("DIR_PATH").required(true).help(
+                    "The path of the directory to remove (e.g., 'OldDir' or 'ParentDir/OldDir')",
+                )),
+        )
+        .subcommand(
+            Command::new("rename")
+                .about("Renames a directory in the ADF file")
+                .arg(
+                    Arg::new("FILE")
+                        .required(true)
+                        .help("The ADF file to modify"),
+                )
+                .arg(
+                    Arg::new("OLD_PATH")
+                        .required(true)
+                        .help("The current path of the directory"),
+                )
+                .arg(
+                    Arg::new("NEW_NAME")
+                        .required(true)
+                        .help("The new name for the directory"),
+                ),
         );
-
     let matches = cmd.get_matches();
 
     match matches.subcommand() {
@@ -269,6 +311,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 adf.defragment()?;
                 adf.write_to_file(file_path)?;
                 println!("ADF file defragmented");
+            }
+            Some(("mkdir", sub_matches)) => {
+                let file_path = sub_matches.get_one::<String>("FILE").unwrap();
+                let dir_path = sub_matches.get_one::<String>("DIR_PATH").unwrap();
+                let mut adf = ADF::from_file(file_path)?;
+                adf.create_directory(dir_path)?;
+                adf.write_to_file(file_path)?;
+                println!(
+                    "Created directory '{}' in ADF file: {}",
+                    dir_path, file_path
+                );
+            }
+            Some(("rmdir", sub_matches)) => {
+                let file_path = sub_matches.get_one::<String>("FILE").unwrap();
+                let dir_path = sub_matches.get_one::<String>("DIR_PATH").unwrap();
+                let mut adf = ADF::from_file(file_path)?;
+                adf.delete_directory(dir_path)?;
+                adf.write_to_file(file_path)?;
+                println!(
+                    "Removed directory '{}' from ADF file: {}",
+                    dir_path, file_path
+                );
+            }
+            Some(("rename", sub_matches)) => {
+                let file_path = sub_matches.get_one::<String>("FILE").unwrap();
+                let old_path = sub_matches.get_one::<String>("OLD_PATH").unwrap();
+                let new_name = sub_matches.get_one::<String>("NEW_NAME").unwrap();
+                let mut adf = ADF::from_file(file_path)?;
+                adf.rename_directory(old_path, new_name)?;
+                adf.write_to_file(file_path)?;
+                println!(
+                    "Renamed directory '{}' to '{}' in ADF file: {}",
+                    old_path, new_name, file_path
+                );
             }
             _ => unreachable!("Exhaustive subcommand matching should prevent this"),
         },
