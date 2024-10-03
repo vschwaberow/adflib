@@ -9,11 +9,15 @@ While working on cross-development for the Amiga, I needed a way to manage ADF f
 ## Features
 
 - Read and write ADF files
+- Read DMS files and convert them to ADF
 - Extract disk information (filesystem type, disk name, creation date, etc.)
 - List files and directories
 - Extract files from ADF images
-- Add files to ADF images (planned)
-- Create new ADF images (planned)
+- Create new ADF images
+- Format ADF images
+- Create, delete, and rename directories in ADF images
+- Defragment ADF images
+- Display and analyze bitmap information
 
 ## Library Usage
 
@@ -81,20 +85,29 @@ cargo install adflib
 ```bash
 adflib <COMMAND> [OPTIONS]
 ```
+
 Commands:
 
-`info` Display information about an ADF file
-`list` List contents of an ADF file
-`extract` Extract files from an ADF image
-`create` Create a new ADF image
-`bitmap` Show the bitmap of an ADF image
+- `info` Display information about an ADF or DMS file
+- `list` List contents of an ADF file
+- `extract` Extract files from an ADF image
+- `create` Create a new ADF image
+- `bitmap` Show the bitmap of an ADF image
+- `format` Format an ADF image
+- `mkdir` Create a directory in an ADF image
+- `rmdir` Remove a directory from an ADF image
+- `rename` Rename a file or directory in an ADF image
+- `defragment` Defragment an ADF image
+- `dms` Subcommand for DMS-specific operations (info, convert)
+
+Example:
+
 
 Example:
 
 ```bash
 adflib info my_disk.adf
 ```
-
 
 ## Development Status
 
