@@ -16,6 +16,10 @@ const SECTORS_PER_TRACK: usize = 16;
 const BYTES_PER_SECTOR: usize = 256;
 const BITS_COUNT: u8 = 32;
 const BIT_BUFFER_REFILL_THRESHOLD: u8 = 24;
+const HEAVY_TEXT_SIZE: usize = 8192;
+const HEAVY_TEXT_MASK: u16 = 8191;
+const HEAVY_LEN_BITS: u8 = 7;
+const HEAVY_OFFSET_BITS: u8 = 12;
 
 #[derive(Debug, Clone)]
 pub struct DMSHeader {
@@ -395,7 +399,7 @@ impl<R: Read + Seek> DMSReader<R> {
         let mut output = Vec::new();
         let mut heavy_text_loc: u16 = 0;
         let mut heavy_lastlen: u16 = 0;
-        let mut heavy_text = [0u8; 8192];
+        let mut heavy_text = [0u8; HEAVY_TEXT_SIZE];
 
         self.init_bit_buf(input);
 
@@ -405,12 +409,12 @@ impl<R: Read + Seek> DMSReader<R> {
                 let byte = self.get_bits(8) as u8;
                 self.drop_bits(8);
                 heavy_text[heavy_text_loc as usize] = byte;
-                heavy_text_loc = (heavy_text_loc + 1) & 8191;
+                heavy_text_loc = (heavy_text_loc + 1) & HEAVY_TEXT_MASK;
                 output.push(byte);
             } else {
                 self.drop_bits(1);
-                let mut len = self.get_bits(7) as u16;
-                self.drop_bits(7);
+                let mut len = self.get_bits(HEAVY_LEN_BITS) as u16;
+                self.drop_bits(HEAVY_LEN_BITS);
 
                 if len == 0 {
                     len = heavy_lastlen;
@@ -418,7 +422,7 @@ impl<R: Read + Seek> DMSReader<R> {
                     heavy_lastlen = len;
                 }
 
-                let offset = self.get_bits(12) as u16;
+                let offset = self.get_bits(HEAVY_OFFSET_BITS) as u16;
                 self.drop_bits(12);
 
                 if offset == 0 {
@@ -430,9 +434,9 @@ impl<R: Read + Seek> DMSReader<R> {
                 for _ in 0..=len {
                     let byte = heavy_text[text_loc as usize];
                     heavy_text[heavy_text_loc as usize] = byte;
-                    heavy_text_loc = (heavy_text_loc + 1) & 8191;
+                    heavy_text_loc = (heavy_text_loc + 1) & HEAVY_TEXT_MASK;
                     output.push(byte);
-                    text_loc = (text_loc + 1) & 8191;
+                    text_loc = (text_loc + 1) & HEAVY_TEXT_MASK;
                 }
             }
         }
