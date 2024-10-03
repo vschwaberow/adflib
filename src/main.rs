@@ -22,7 +22,7 @@ fn print_dms_info(info: &DMSInfo, file_path: &str) {
     println!("------------------------");
     println!("Signature: {}", info.signature);
     println!("Header Type: {}", info.header_type);
-    println!("Info bits: {:#010x}", info.info_bits);
+    println!("Info Bits: {}", info.info_bits);
     println!("Date: {}", formatted_date);
     println!("Compression: {}", info.compression_mode);
 }
