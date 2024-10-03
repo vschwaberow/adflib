@@ -271,6 +271,11 @@ impl<R: Read + Seek> DMSReader<R> {
             DMSPackingMode::None => Ok(compressed_data),
             DMSPackingMode::Simple => self.unpack_rle(&compressed_data),
             DMSPackingMode::Quick => self.unpack_quick(&compressed_data),
+            DMSPackingMode::Heavy1
+            | DMSPackingMode::Heavy2
+            | DMSPackingMode::Heavy3
+            | DMSPackingMode::Heavy4
+            | DMSPackingMode::Heavy5 => self.unpack_heavy(&compressed_data),
             _ => Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "Unsupported packing mode",
@@ -383,6 +388,55 @@ impl<R: Read + Seek> DMSReader<R> {
         }
 
         self.quick_text_loc = (self.quick_text_loc.wrapping_add(5)) & 255;
+        Ok(output)
+    }
+
+    fn unpack_heavy(&mut self, input: &[u8]) -> io::Result<Vec<u8>> {
+        let mut output = Vec::new();
+        let mut heavy_text_loc: u16 = 0;
+        let mut heavy_lastlen: u16 = 0;
+        let mut heavy_text = [0u8; 8192];
+
+        self.init_bit_buf(input);
+
+        while output.len() < QUICK_UNPACK_SIZE_BYTES {
+            if self.get_bits(1) != 0 {
+                self.drop_bits(1);
+                let byte = self.get_bits(8) as u8;
+                self.drop_bits(8);
+                heavy_text[heavy_text_loc as usize] = byte;
+                heavy_text_loc = (heavy_text_loc + 1) & 8191;
+                output.push(byte);
+            } else {
+                self.drop_bits(1);
+                let mut len = self.get_bits(7) as u16;
+                self.drop_bits(7);
+
+                if len == 0 {
+                    len = heavy_lastlen;
+                } else {
+                    heavy_lastlen = len;
+                }
+
+                let offset = self.get_bits(12) as u16;
+                self.drop_bits(12);
+
+                if offset == 0 {
+                    return Ok(output);
+                }
+
+                let mut text_loc = heavy_text_loc.wrapping_sub(offset).wrapping_sub(1) & 8191;
+
+                for _ in 0..=len {
+                    let byte = heavy_text[text_loc as usize];
+                    heavy_text[heavy_text_loc as usize] = byte;
+                    heavy_text_loc = (heavy_text_loc + 1) & 8191;
+                    output.push(byte);
+                    text_loc = (text_loc + 1) & 8191;
+                }
+            }
+        }
+
         Ok(output)
     }
 
