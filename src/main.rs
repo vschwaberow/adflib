@@ -7,19 +7,23 @@ use adflib::disk::{
     BitmapInfo, DiskInfo, DiskType, FileInfo, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS, ADF_TRACK_SIZE,
 };
 use adflib::dms::{convert_dms_to_adf, DMSInfo, DMSReader};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::{Arg, Command};
 use std::fs::File;
 use std::io::Write;
 use std::time::UNIX_EPOCH;
 
 fn print_dms_info(info: &DMSInfo, file_path: &str) {
+    let datetime =
+        DateTime::<Utc>::from_timestamp(info.date as i64, 0).unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
+    let formatted_date = datetime.format("%Y-%m-%d %H:%M:%S UTC");
+
     println!("DMS Information for: {}", file_path);
     println!("------------------------");
     println!("Signature: {}", info.signature);
     println!("Header Type: {}", info.header_type);
     println!("Info bits: {:#010x}", info.info_bits);
-    println!("Date: {}", info.date);
+    println!("Date: {}", formatted_date);
     println!("Compression: {}", info.compression_mode);
 }
 
