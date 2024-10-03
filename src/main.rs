@@ -7,7 +7,7 @@ use adflib::disk::{
     BitmapInfo, DiskInfo, DiskType, FileInfo, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS, ADF_TRACK_SIZE,
 };
 use adflib::dms::{convert_dms_to_adf, DMSInfo, DMSReader};
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use clap::{Arg, Command};
 use std::fs::File;
 use std::io::Write;
