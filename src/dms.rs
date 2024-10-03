@@ -79,7 +79,7 @@ impl From<u16> for DMSPackingMode {
 pub struct DMSInfo {
     pub signature: String,
     pub header_type: String,
-    pub info_bits: u32,
+    pub info_bits: InfoBits,
     pub date: u32,
     pub low_track: u16,
     pub high_track: u16,
@@ -101,6 +101,76 @@ pub struct DMSTrackHeader {
     pub u_sum: u16,
     pub d_crc: u16,
     pub h_crc: u16,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct InfoBits(u32);
+
+impl InfoBits {
+    pub const NOZERO: u32 = 0x00000001;
+    pub const ENCRYPT: u32 = 0b00000010;
+    pub const APPENDS: u32 = 0b00000100;
+    pub const BANNER: u32 = 0b00001000;
+    pub const HIGHDENSITY: u32 = 0b00010000;
+    pub const PC: u32 = 0b00100000;
+    pub const DMS_DEVICE_FIX: u32 = 0b01000000;
+    pub const FILE_ID_DIZ: u32 = 0b100000000;
+
+    pub fn new(bits: u32) -> Self {
+        InfoBits(bits)
+    }
+
+    pub fn contains(&self, flag: u32) -> bool {
+        self.0 & flag != 0
+    }
+}
+
+impl std::fmt::Display for InfoBits {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "InfoBits: {:#010x}", self.0)?;
+        writeln!(f, "Flags:")?;
+        if self.0 == 0 {
+            writeln!(f, "  - No flags set")?;
+        } else {
+            let mut flag_set = false;
+            if self.contains(Self::NOZERO) {
+                writeln!(f, "  - NOZERO: No zero compression")?;
+                flag_set = true;
+            }
+            if self.contains(Self::ENCRYPT) {
+                writeln!(f, "  - ENCRYPT: File is encrypted")?;
+                flag_set = true;
+            }
+            if self.contains(Self::APPENDS) {
+                writeln!(f, "  - APPENDS: File has appended data")?;
+                flag_set = true;
+            }
+            if self.contains(Self::BANNER) {
+                writeln!(f, "  - BANNER: File includes a banner")?;
+                flag_set = true;
+            }
+            if self.contains(Self::HIGHDENSITY) {
+                writeln!(f, "  - HIGHDENSITY: High-density disk")?;
+                flag_set = true;
+            }
+            if self.contains(Self::PC) {
+                writeln!(f, "  - PC: Intended for PC systems")?;
+                flag_set = true;
+            }
+            if self.contains(Self::DMS_DEVICE_FIX) {
+                writeln!(f, "  - DMS_DEVICE_FIX: Device-specific fix")?;
+                flag_set = true;
+            }
+            if self.contains(Self::FILE_ID_DIZ) {
+                writeln!(f, "  - FILE_ID_DIZ: Includes FILE_ID.DIZ")?;
+                flag_set = true;
+            }
+            if !flag_set {
+                writeln!(f, "  - Unknown flags set")?;
+            }
+        }
+        Ok(())
+    }
 }
 
 pub struct DMSReader<R: Read + Seek> {
@@ -183,7 +253,7 @@ impl<R: Read + Seek> DMSReader<R> {
         DMSInfo {
             signature: String::from_utf8_lossy(&self.header.signature).to_string(),
             header_type: String::from_utf8_lossy(&self.header.header_type).to_string(),
-            info_bits: self.header.info_bits,
+            info_bits: InfoBits::new(self.header.info_bits),
             date: self.header.date,
             low_track: self.header.low_track,
             high_track: self.header.high_track,
