@@ -444,6 +444,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 file_path, disk_type, disk_name
             );
         }
+        None => {
+            println!("No subcommand was used. Use --help for usage information.");
+            return Ok(());
+        }
         _ => unreachable!("Exhaustive subcommand matching should prevent this"),
     }
 
