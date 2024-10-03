@@ -14,12 +14,16 @@ use std::io::Write;
 use std::time::UNIX_EPOCH;
 
 fn print_dms_info(info: &DMSInfo, file_path: &str) {
+    let datetime =
+        DateTime::<Utc>::from_timestamp(info.date as i64, 0).unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
+    let formatted_date = datetime.format("%Y-%m-%d %H:%M:%S UTC");
+
     println!("DMS Information for: {}", file_path);
     println!("------------------------");
     println!("Signature: {}", info.signature);
     println!("Header Type: {}", info.header_type);
     println!("Info bits: {:#010x}", info.info_bits);
-    println!("Date: {}", info.date);
+    println!("Date: {}", formatted_date);
     println!("Compression: {}", info.compression_mode);
 }
 
