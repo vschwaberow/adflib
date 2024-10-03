@@ -480,10 +480,42 @@ impl<R: Read + Seek> DMSReader<R> {
 
 pub fn dms_to_adf<R: Read + Seek, W: Write>(reader: R, writer: &mut W) -> io::Result<()> {
     let mut dms_reader = DMSReader::new(reader)?;
-    for _ in 0..dms_reader.header.high_track - dms_reader.header.low_track + 1 {
+
+    #[cfg(debug_assertions)]
+    println!("DMS Header: {:?}", dms_reader.header);
+
+    for track in dms_reader.header.low_track..=dms_reader.header.high_track {
+        #[cfg(debug_assertions)]
+        println!("Processing track: {}", track);
+
+        let track_header = dms_reader.read_track_header()?;
+
+        #[cfg(debug_assertions)]
+        println!("Read header ID: {:?}", track_header.header_id);
+
+        #[cfg(debug_assertions)]
+        println!("Read track header: {:?}", track_header);
+
+        #[cfg(debug_assertions)]
+        println!(
+            "Decompressing data with packing mode: {:?}, expected unpacked length: {}",
+            track_header.packing_mode, track_header.unpack_length
+        );
+
         let track_data = dms_reader.read_track()?;
+
+        #[cfg(debug_assertions)]
+        println!("Decompressed data length: {}", track_data.len());
+
         writer.write_all(&track_data)?;
+
+        #[cfg(debug_assertions)]
+        println!("Wrote track data to output");
     }
+
+    #[cfg(debug_assertions)]
+    println!("DMS to ADF conversion completed");
+
     Ok(())
 }
 
