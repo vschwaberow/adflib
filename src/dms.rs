@@ -397,11 +397,14 @@ impl<R: Read + Seek> DMSReader<R> {
 
     fn unpack_heavy(&mut self, input: &[u8]) -> io::Result<Vec<u8>> {
         let mut output = Vec::new();
+        let mut heavy_text = [0u8; HEAVY_TEXT_SIZE];
         let mut heavy_text_loc: u16 = 0;
         let mut heavy_lastlen: u16 = 0;
-        let mut heavy_text = [0u8; HEAVY_TEXT_SIZE];
 
         self.init_bit_buf(input);
+
+        #[cfg(debug_assertions)]
+        let mut total_bits_read = 0;
 
         while output.len() < QUICK_UNPACK_SIZE_BYTES {
             if self.get_bits(1) != 0 {
@@ -411,6 +414,12 @@ impl<R: Read + Seek> DMSReader<R> {
                 heavy_text[heavy_text_loc as usize] = byte;
                 heavy_text_loc = (heavy_text_loc + 1) & HEAVY_TEXT_MASK;
                 output.push(byte);
+
+                #[cfg(debug_assertions)]
+                {
+                    total_bits_read += 9;
+                    println!("Literal: {}", byte);
+                }
             } else {
                 self.drop_bits(1);
                 let mut len = self.get_bits(HEAVY_LEN_BITS) as u16;
@@ -423,45 +432,69 @@ impl<R: Read + Seek> DMSReader<R> {
                 }
 
                 let offset = self.get_bits(HEAVY_OFFSET_BITS) as u16;
-                self.drop_bits(12);
+                self.drop_bits(HEAVY_OFFSET_BITS);
 
-                if offset == 0 {
-                    return Ok(output);
+                #[cfg(debug_assertions)]
+                {
+                    total_bits_read += 1 + HEAVY_LEN_BITS + HEAVY_OFFSET_BITS;
+                    println!("Match: len={}, offset={}", len, offset);
                 }
 
-                let mut text_loc = heavy_text_loc.wrapping_sub(offset).wrapping_sub(1) & 8191;
+                debug_assert!(offset <= HEAVY_TEXT_MASK, "Offset out of bounds");
 
-                for _ in 0..=len {
+                let mut text_loc =
+                    heavy_text_loc.wrapping_sub(offset).wrapping_sub(1) & HEAVY_TEXT_MASK;
+
+                for _ in 0..len {
                     let byte = heavy_text[text_loc as usize];
                     heavy_text[heavy_text_loc as usize] = byte;
                     heavy_text_loc = (heavy_text_loc + 1) & HEAVY_TEXT_MASK;
                     output.push(byte);
                     text_loc = (text_loc + 1) & HEAVY_TEXT_MASK;
+
+                    if output.len() >= QUICK_UNPACK_SIZE_BYTES {
+                        #[cfg(debug_assertions)]
+                        println!("Early exit: output size reached");
+                        return Ok(output);
+                    }
                 }
             }
         }
+
+        #[cfg(debug_assertions)]
+        println!("Total bits read: {}", total_bits_read);
 
         Ok(output)
     }
 
     fn init_bit_buf(&mut self, input: &[u8]) {
         self.bit_buffer = u32::from_be_bytes([input[0], input[1], input[2], input[3]]);
-        self.bit_count = 32;
+        self.bit_count = BITS_COUNT;
     }
 
-    fn get_bits(&self, n: u8) -> u32 {
-        (self.bit_buffer >> (32 - n)) & ((1 << n) - 1)
+    fn get_bits(&self, count: u8) -> u32 {
+        debug_assert!(count <= 32, "Attempting to read too many bits");
+        (self.bit_buffer >> (BITS_COUNT - count)) & ((1 << count) - 1)
     }
 
-    fn drop_bits(&mut self, n: u8) {
-        self.bit_buffer <<= n;
-        self.bit_count -= n;
+    fn drop_bits(&mut self, count: u8) {
+        debug_assert!(
+            count <= self.bit_count,
+            "Attempting to drop more bits than available"
+        );
+        self.bit_buffer <<= count;
+        self.bit_count -= count;
         if self.bit_count <= BIT_BUFFER_REFILL_THRESHOLD {
-            let mut next_byte = [0u8; 1];
-            if self.reader.read_exact(&mut next_byte).is_ok() {
-                self.bit_buffer |= (next_byte[0] as u32) << (24 - self.bit_count);
-                self.bit_count += BITS_COUNT;
-            }
+            self.refill_bit_buffer();
+        }
+    }
+
+    fn refill_bit_buffer(&mut self) {
+        let mut buf = [0u8; 2];
+        if let Ok(_) = self.reader.read_exact(&mut buf) {
+            let new_bits = u32::from_be_bytes([0, 0, buf[0], buf[1]]);
+            self.bit_buffer |= new_bits >> self.bit_count;
+            self.bit_count += 16;
         }
     }
 
