@@ -145,7 +145,7 @@ impl ADF {
         self.data.fill(0);
         self.write_boot_block(disk_type)?;
         self.write_root_block(disk_type, disk_name)?;
-        self.write_bitmap_blocks()?;
+        self.initialize_bitmap()?;
         Ok(())
     }
     pub fn extract_file(&self, file_name: &str) -> io::Result<ExtractedFile> {
@@ -219,7 +219,7 @@ impl ADF {
         }
         Ok(ADF {
             data: data.to_vec(),
-            bitmap: vec![true; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![true; ADF_NUM_SECTORS],
         })
     }
 
@@ -301,7 +301,8 @@ impl ADF {
         self.bitmap.iter().filter(|&&b| !b).count()
     }
 
-    pub fn write_to_file(&self, path: &str) -> Result<()> {
+    pub fn write_to_file(&mut self, path: &str) -> Result<()> {
+        self.update_bitmap_blocks()?;
         let mut file = File::create(path)?;
         file.write_all(&self.data)?;
         Ok(())
@@ -497,6 +498,7 @@ impl ADF {
     pub fn allocate_block(&mut self) -> Result<usize> {
         if let Some(block_index) = self.find_free_block() {
             self.set_block_used(block_index);
+            self.update_bitmap_blocks()?;
             Ok(block_index)
         } else {
             Err(io::Error::new(
@@ -513,6 +515,117 @@ impl ADF {
             .skip(2)
             .find(|&(_, &is_free)| is_free)
             .map(|(index, _)| index)
+    }
+    
+    pub fn write_file(&mut self, file_name: &str, contents: &[u8], protection: u32) -> Result<()> {
+        let file_size = contents.len();
+        let num_data_blocks = (file_size + (ADF_SECTOR_SIZE - 24) - 1) / (ADF_SECTOR_SIZE - 24);
+        let mut allocated_blocks = Vec::with_capacity(num_data_blocks);
+    
+        for _ in 0..num_data_blocks {
+            allocated_blocks.push(self.allocate_block()?);
+        }
+    
+        let header_block = self.allocate_block()?;
+        let mut header_data = vec![0u8; ADF_SECTOR_SIZE];
+        header_data[0] = 0;
+        header_data[4..8].copy_from_slice(&(file_size as u32).to_be_bytes());
+        
+        if !allocated_blocks.is_empty() {
+            header_data[16..20].copy_from_slice(&(allocated_blocks[0] as u32).to_be_bytes());
+        }
+        
+        let name_bytes = file_name.as_bytes();
+        let name_len = std::cmp::min(name_bytes.len(), 30);
+        header_data[432] = name_len as u8;
+        header_data[433..433 + name_len].copy_from_slice(&name_bytes[..name_len]);
+    
+        header_data[436..440].copy_from_slice(&protection.to_be_bytes());
+    
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
+    
+        header_data[440..444].copy_from_slice(&days);
+        header_data[444..448].copy_from_slice(&mins);
+        header_data[448..452].copy_from_slice(&ticks);
+    
+        self.write_sector(header_block, &header_data)?;
+    
+        let mut bytes_written = 0;
+        for (i, &block) in allocated_blocks.iter().enumerate() {
+            let mut data_block = vec![0u8; ADF_SECTOR_SIZE];
+            
+            if i < allocated_blocks.len() - 1 {
+                data_block[0..4].copy_from_slice(&(allocated_blocks[i+1] as u32).to_be_bytes());
+            }
+    
+            let remaining_bytes = file_size - bytes_written;
+            let bytes_to_write = std::cmp::min(ADF_SECTOR_SIZE - 24, remaining_bytes);
+            data_block[24..24 + bytes_to_write].copy_from_slice(&contents[bytes_written..bytes_written + bytes_to_write]);
+            self.write_sector(block, &data_block)?;
+            bytes_written += bytes_to_write;
+        }
+    
+        self.add_file_to_directory(ROOT_BLOCK, header_block)?;
+    
+        Ok(())
+    }
+    
+    fn add_file_to_directory(&mut self, dir_block: usize, file_header_block: usize) -> Result<()> {
+        let mut dir_data = self.read_sector(dir_block).to_vec();
+    
+        for i in (24..=51).rev() {
+            let sector = u32::from_be_bytes([
+                dir_data[i * 4],
+                dir_data[i * 4 + 1],
+                dir_data[i * 4 + 2],
+                dir_data[i * 4 + 3],
+            ]);
+            if sector == 0 {
+                dir_data[i * 4..(i * 4) + 4].copy_from_slice(&(file_header_block as u32).to_be_bytes());
+                self.write_sector(dir_block, &dir_data)?;
+                return Ok(());
+            }
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "No free directory entries available",
+        ))
+    }
+
+    pub fn create_directory(&mut self, dir_name: &str, protection: u32) -> Result<()> {
+        let dir_header_block = self.allocate_block()?;
+    
+        let mut dir_header_data = vec![0u8; ADF_SECTOR_SIZE];
+        dir_header_data[0] = 2;
+    
+        let name_bytes = dir_name.as_bytes();
+        let name_len = std::cmp::min(name_bytes.len(), 30);
+        dir_header_data[432] = name_len as u8;
+        dir_header_data[433..433 + name_len].copy_from_slice(&name_bytes[..name_len]);
+    
+        dir_header_data[436..440].copy_from_slice(&protection.to_be_bytes());
+    
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
+    
+        dir_header_data[440..444].copy_from_slice(&days);
+        dir_header_data[444..448].copy_from_slice(&mins);
+        dir_header_data[448..452].copy_from_slice(&ticks);
+    
+        self.write_sector(dir_header_block, &dir_header_data)?;
+    
+        self.add_file_to_directory(ROOT_BLOCK, dir_header_block)?;
+    
+        Ok(())
     }
 
     pub fn read_file_contents(&self, block: usize) -> io::Result<Vec<u8>> {
@@ -652,18 +765,7 @@ impl ADF {
         self.write_sector(ROOT_BLOCK, &root_block)
     }
 
-    fn write_bitmap_blocks(&mut self) -> Result<()> {
-        let mut bitmap_block = [0xFFu8; ADF_SECTOR_SIZE];
 
-        bitmap_block[0] = 0xF8;
-        bitmap_block[1] = 0xFF;
-        bitmap_block[2] = 0xFF;
-
-        self.write_sector(ROOT_BLOCK + 1, &bitmap_block)?;
-        self.write_sector(ROOT_BLOCK + 2, &[0xFFu8; ADF_SECTOR_SIZE])?;
-
-        Ok(())
-    }
     pub fn information(&self) -> io::Result<DiskInfo> {
         let root_block = self.read_sector(ROOT_BLOCK);
         Ok(DiskInfo {
@@ -711,7 +813,8 @@ impl ADF {
         let files = self.list_root_directory()?;
 
         for file in files {
-            output.push_str(&format!("{} ({} bytes)\n", file.name, file.size));
+             let protection_flags = self.format_protection_flags(file.protection);
+             output.push_str(&format!("{} ({} bytes) {} \n", file.name, file.size, protection_flags));
         }
 
         Ok(output)
