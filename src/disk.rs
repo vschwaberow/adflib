@@ -145,7 +145,7 @@ impl ADF {
         self.data.fill(0);
         self.write_boot_block(disk_type)?;
         self.write_root_block(disk_type, disk_name)?;
-        self.write_bitmap_blocks()?;
+        self.initialize_bitmap()?;
         Ok(())
     }
     pub fn extract_file(&self, file_name: &str) -> io::Result<ExtractedFile> {
@@ -219,7 +219,7 @@ impl ADF {
         }
         Ok(ADF {
             data: data.to_vec(),
-            bitmap: vec![true; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
+            bitmap: vec![true; ADF_NUM_SECTORS],
         })
     }
 
@@ -301,7 +301,8 @@ impl ADF {
         self.bitmap.iter().filter(|&&b| !b).count()
     }
 
-    pub fn write_to_file(&self, path: &str) -> Result<()> {
+    pub fn write_to_file(&mut self, path: &str) -> Result<()> {
+        self.update_bitmap_blocks()?;
         let mut file = File::create(path)?;
         file.write_all(&self.data)?;
         Ok(())
@@ -497,6 +498,7 @@ impl ADF {
     pub fn allocate_block(&mut self) -> Result<usize> {
         if let Some(block_index) = self.find_free_block() {
             self.set_block_used(block_index);
+            self.update_bitmap_blocks()?;
             Ok(block_index)
         } else {
             Err(io::Error::new(
@@ -652,18 +654,7 @@ impl ADF {
         self.write_sector(ROOT_BLOCK, &root_block)
     }
 
-    fn write_bitmap_blocks(&mut self) -> Result<()> {
-        let mut bitmap_block = [0xFFu8; ADF_SECTOR_SIZE];
 
-        bitmap_block[0] = 0xF8;
-        bitmap_block[1] = 0xFF;
-        bitmap_block[2] = 0xFF;
-
-        self.write_sector(ROOT_BLOCK + 1, &bitmap_block)?;
-        self.write_sector(ROOT_BLOCK + 2, &[0xFFu8; ADF_SECTOR_SIZE])?;
-
-        Ok(())
-    }
     pub fn information(&self) -> io::Result<DiskInfo> {
         let root_block = self.read_sector(ROOT_BLOCK);
         Ok(DiskInfo {
