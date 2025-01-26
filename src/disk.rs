@@ -597,6 +597,37 @@ impl ADF {
         ))
     }
 
+    pub fn create_directory(&mut self, dir_name: &str, protection: u32) -> Result<()> {
+        let dir_header_block = self.allocate_block()?;
+    
+        let mut dir_header_data = vec![0u8; ADF_SECTOR_SIZE];
+        dir_header_data[0] = 2;
+    
+        let name_bytes = dir_name.as_bytes();
+        let name_len = std::cmp::min(name_bytes.len(), 30);
+        dir_header_data[432] = name_len as u8;
+        dir_header_data[433..433 + name_len].copy_from_slice(&name_bytes[..name_len]);
+    
+        dir_header_data[436..440].copy_from_slice(&protection.to_be_bytes());
+    
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
+    
+        dir_header_data[440..444].copy_from_slice(&days);
+        dir_header_data[444..448].copy_from_slice(&mins);
+        dir_header_data[448..452].copy_from_slice(&ticks);
+    
+        self.write_sector(dir_header_block, &dir_header_data)?;
+    
+        self.add_file_to_directory(ROOT_BLOCK, dir_header_block)?;
+    
+        Ok(())
+    }
+
     pub fn read_file_contents(&self, block: usize) -> io::Result<Vec<u8>> {
         let block_data = self.read_sector(block);
 
@@ -760,7 +791,8 @@ impl ADF {
                 root_block[13],
                 root_block[14],
                 root_block[15],
-            ]),first_reserved_block: u32::from_be_bytes([
+            ]),
+            first_reserved_block: u32::from_be_bytes([
                 root_block[128],
                 root_block[129],
                 root_block[130],
@@ -781,7 +813,8 @@ impl ADF {
         let files = self.list_root_directory()?;
 
         for file in files {
-            output.push_str(&format!("{} ({} bytes)\n", file.name, file.size));
+             let protection_flags = self.format_protection_flags(file.protection);
+             output.push_str(&format!("{} ({} bytes) {} \n", file.name, file.size, protection_flags));
         }
 
         Ok(output)
