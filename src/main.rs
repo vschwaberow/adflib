@@ -274,7 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         Some(("create", sub_matches)) => {
             let file_path = sub_matches.get_one::<String>("FILE").unwrap();
-            let adf = ADF {
+            let mut adf = ADF {
                 data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
                 bitmap: vec![false; ADF_NUM_SECTORS],
             };
