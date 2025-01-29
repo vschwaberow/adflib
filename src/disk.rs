@@ -633,45 +633,10 @@ impl ADF {
 
         match block_data[0] {
             2 => {
-                let file_size = u32::from_be_bytes([
-                    block_data[4],
-                    block_data[5],
-                    block_data[6],
-                    block_data[7],
-                ]) as usize;
-                let mut contents = Vec::with_capacity(file_size);
-
-                let mut current_block = u32::from_be_bytes([
-                    block_data[16],
-                    block_data[17],
-                    block_data[18],
-                    block_data[19],
-                ]) as usize;
-
-                while current_block != 0 && contents.len() < file_size {
-                    let data_block = self.read_sector(current_block);
-                    let data_size = std::cmp::min(512 - 24, file_size - contents.len());
-                    contents.extend_from_slice(&data_block[24..24 + data_size]);
-                    current_block = u32::from_be_bytes([
-                        data_block[0],
-                        data_block[1],
-                        data_block[2],
-                        data_block[3],
-                    ]) as usize;
-                }
-
-                if contents.len() != file_size {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        format!(
-                            "File size mismatch. Expected: {}, Read: {}",
-                            file_size,
-                            contents.len()
-                        ),
-                    ));
-                }
-
-                Ok(contents)
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Cannot read directory contents as file",
+                ));
             }
             0 => {
                 let file_size = u32::from_be_bytes([
