@@ -369,8 +369,8 @@ impl ADF {
     fn read_file_header(&self, block: usize) -> Result<FileInfo> {
         let block_data = self.read_sector(block);
 
-        let name_len = block_data[432] as usize;
-        let name = String::from_utf8_lossy(&block_data[433..433 + name_len]).to_string();
+        let name_len = block_data[FILE_NAME_LEN_OFFSET] as usize;
+        let name = String::from_utf8_lossy(&block_data[FILE_NAME_OFFSET..FILE_NAME_OFFSET + name_len]).to_string();
 
         let size = u32::from_be_bytes([block_data[4], block_data[5], block_data[6], block_data[7]]);
         let is_dir = block_data[0] == 2;
