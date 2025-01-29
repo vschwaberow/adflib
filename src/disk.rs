@@ -436,20 +436,6 @@ impl ADF {
         result
     }
 
-    pub fn calculate_checksum(&self, data: &[u8]) -> u32 {
-        let mut checksum = 0u32;
-        for chunk in data.chunks(4) {
-            let word = u32::from_be_bytes([
-                chunk[0],
-                chunk.get(1).copied().unwrap_or(0),
-                chunk.get(2).copied().unwrap_or(0),
-                chunk.get(3).copied().unwrap_or(0),
-            ]);
-            checksum = checksum.wrapping_add(word);
-        }
-        !checksum
-    }
-
     pub fn set_block_used(&mut self, block_index: usize) {
         if block_index < self.bitmap.len() {
             self.bitmap[block_index] = false;
@@ -474,9 +460,8 @@ impl ADF {
                 bitmap_block[byte_index] &= !(1 << (7 - bit_index));
             }
         }
-        let checksum_offset = 0;
-        let checksum = self.calculate_checksum(&bitmap_block[checksum_offset..]);
-        bitmap_block[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_be_bytes());
+        let checksum = self.calculate_checksum(&bitmap_block);
+        bitmap_block[0..4].copy_from_slice(&checksum.to_be_bytes());
         self.write_sector(bitmap_block_index, &bitmap_block)?;
         Ok(())
     }
@@ -486,13 +471,26 @@ impl ADF {
         let mut bitmap_block = vec![0u8; ADF_SECTOR_SIZE];
         bitmap_block[0] = 0; // bm_flag
         bitmap_block[1] = 0;
-        let checksum_offset = 20;
-        let checksum = self.calculate_checksum(&bitmap_block[checksum_offset..]);
+        let checksum = self.calculate_checksum(&bitmap_block);
         bitmap_block[4..8].copy_from_slice(&checksum.to_be_bytes());
         self.write_sector(bitmap_block_index, &bitmap_block)?;
         self.set_block_used(bitmap_block_index);
         self.update_bitmap_blocks()?;
         Ok(())
+    }
+
+    pub fn calculate_checksum(&self, data: &[u8]) -> u32 {
+        let mut checksum = 0u32;
+        for chunk in data.chunks(4) {
+            let word = u32::from_be_bytes([
+                chunk[0],
+                chunk.get(1).copied().unwrap_or(0),
+                chunk.get(2).copied().unwrap_or(0),
+                chunk.get(3).copied().unwrap_or(0),
+            ]);
+            checksum = checksum.wrapping_add(word);
+        }
+        !checksum
     }
 
     pub fn allocate_block(&mut self) -> Result<usize> {
