@@ -8,12 +8,7 @@ use std::fs::File;
 use std::io::{self, Error, ErrorKind, Read, Result, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
-
-pub const ADF_TRACK_SIZE: usize = 11 * ADF_SECTOR_SIZE;
-pub const ADF_NUM_TRACKS: usize = 80 * 2;
-pub const ROOT_BLOCK: usize = 880;
-pub const ADF_SECTOR_SIZE: usize = 512;
-pub const ADF_NUM_SECTORS: usize = 1760;
+use crate::consts::*;
 
 #[derive(Debug, Clone)]
 pub struct ADF {
@@ -406,8 +401,8 @@ impl ADF {
         ]);
 
         let creation_date = match days
-            .checked_mul(86400)
-            .and_then(|d| d.checked_add(mins.checked_mul(60).unwrap_or(0)))
+            .checked_mul(SECONDS_PER_DAY as u32)
+            .and_then(|d| d.checked_add(mins.checked_mul(SECONDS_PER_MINUTE as u32).unwrap_or(0)))
             .and_then(|t| t.checked_add(ticks.checked_div(50).unwrap_or(0)))
         {
             Some(secs) => SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64),
@@ -569,9 +564,9 @@ impl ADF {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SystemTime error: {}", e)))?;
-        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
-        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
-        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
+        let days = u32::to_be_bytes((now.as_secs() / SECONDS_PER_DAY) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_DAY) / SECONDS_PER_MINUTE) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_MINUTE) * 50) as u32);
 
         header_data[440..444].copy_from_slice(&days);
         header_data[444..448].copy_from_slice(&mins);
@@ -623,9 +618,9 @@ impl ADF {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SystemTime error: {}", e)))?;
-        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
-        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
-        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
+        let days = u32::to_be_bytes((now.as_secs() / SECONDS_PER_DAY) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_DAY) / SECONDS_PER_MINUTE) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_MINUTE) * 50) as u32);
 
         dir_header_data[440..444].copy_from_slice(&days);
         dir_header_data[444..448].copy_from_slice(&mins);
@@ -738,9 +733,9 @@ impl ADF {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SystemTime error: {}", e)))?;
-        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
-        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
-        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
+        let days = u32::to_be_bytes((now.as_secs() / SECONDS_PER_DAY) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_DAY) / SECONDS_PER_MINUTE) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_MINUTE) * 50) as u32);
 
         root_block[ADF_SECTOR_SIZE - 92..ADF_SECTOR_SIZE - 88].copy_from_slice(&days);
         root_block[ADF_SECTOR_SIZE - 88..ADF_SECTOR_SIZE - 84].copy_from_slice(&mins);
