@@ -351,12 +351,12 @@ impl ADF {
 
     pub fn list_directory(&self, block: usize) -> impl Iterator<Item = Result<FileInfo>> + '_ {
         let block_data = self.read_sector(block);
-        (24..=51).rev().filter_map(move |i| {
+        (DIR_ENTRIES_START..=DIR_ENTRIES_END).rev().filter_map(move |i| {
             let sector = u32::from_be_bytes([
-                block_data[i * 4],
-                block_data[i * 4 + 1],
-                block_data[i * 4 + 2],
-                block_data[i * 4 + 3],
+                block_data[i * DIR_ENTRY_SIZE],
+                block_data[i * DIR_ENTRY_SIZE + 1],
+                block_data[i * DIR_ENTRY_SIZE + 2],
+                block_data[i * DIR_ENTRY_SIZE + 3],
             ]);
             if sector != 0 {
                 Some(self.read_file_header(sector as usize))
