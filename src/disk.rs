@@ -523,10 +523,14 @@ impl ADF {
         let mut allocated_blocks = Vec::with_capacity(num_data_blocks);
     
         for _ in 0..num_data_blocks {
-            allocated_blocks.push(self.allocate_block()?);
+            allocated_blocks.push(self.allocate_block().map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, format!("Failed to allocate block: {}", e))
+            })?);
         }
     
-        let header_block = self.allocate_block()?;
+        let header_block = self.allocate_block().map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to allocate block: {}", e))
+        })?;
         let mut header_data = vec![0u8; ADF_SECTOR_SIZE];
         header_data[0] = 0;
         header_data[4..8].copy_from_slice(&(file_size as u32).to_be_bytes());
@@ -544,7 +548,7 @@ impl ADF {
     
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SystemTime error: {}", e)))?;
         let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
         let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
         let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
@@ -553,7 +557,9 @@ impl ADF {
         header_data[444..448].copy_from_slice(&mins);
         header_data[448..452].copy_from_slice(&ticks);
     
-        self.write_sector(header_block, &header_data)?;
+        self.write_sector(header_block, &header_data).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to write sector: {}", e))
+        })?;
     
         let mut bytes_written = 0;
         for (i, &block) in allocated_blocks.iter().enumerate() {
@@ -566,11 +572,15 @@ impl ADF {
             let remaining_bytes = file_size - bytes_written;
             let bytes_to_write = std::cmp::min(ADF_SECTOR_SIZE - 24, remaining_bytes);
             data_block[24..24 + bytes_to_write].copy_from_slice(&contents[bytes_written..bytes_written + bytes_to_write]);
-            self.write_sector(block, &data_block)?;
+            self.write_sector(block, &data_block).map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, format!("Failed to write sector: {}", e))
+            })?;
             bytes_written += bytes_to_write;
         }
     
-        self.add_file_to_directory(ROOT_BLOCK, header_block)?;
+        self.add_file_to_directory(ROOT_BLOCK, header_block).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to add file to directory: {}", e))
+        })?;
     
         Ok(())
     }
@@ -587,7 +597,9 @@ impl ADF {
             ]);
             if sector == 0 {
                 dir_data[i * 4..(i * 4) + 4].copy_from_slice(&(file_header_block as u32).to_be_bytes());
-                self.write_sector(dir_block, &dir_data)?;
+                self.write_sector(dir_block, &dir_data).map_err(|e| {
+                    io::Error::new(io::ErrorKind::Other, format!("Failed to write sector: {}", e))
+                })?;
                 return Ok(());
             }
         }
@@ -598,43 +610,51 @@ impl ADF {
     }
 
     pub fn create_directory(&mut self, dir_name: &str, protection: u32) -> Result<()> {
-        let dir_header_block = self.allocate_block()?;
-    
+        let dir_header_block = self.allocate_block().map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to allocate block: {}", e))
+        })?;
+
         let mut dir_header_data = vec![0u8; ADF_SECTOR_SIZE];
         dir_header_data[0] = 2;
-    
+
         let name_bytes = dir_name.as_bytes();
         let name_len = std::cmp::min(name_bytes.len(), 30);
         dir_header_data[432] = name_len as u8;
         dir_header_data[433..433 + name_len].copy_from_slice(&name_bytes[..name_len]);
-    
+
         dir_header_data[436..440].copy_from_slice(&protection.to_be_bytes());
-    
+
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SystemTime error: {}", e)))?;
         let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
         let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
         let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
-    
+
         dir_header_data[440..444].copy_from_slice(&days);
         dir_header_data[444..448].copy_from_slice(&mins);
         dir_header_data[448..452].copy_from_slice(&ticks);
-    
+
         for i in 0..72 {
             dir_header_data[12 + i * 4..16 + i * 4].copy_from_slice(&0u32.to_be_bytes());
         }
         dir_header_data[8..12].copy_from_slice(&(ROOT_BLOCK as u32).to_be_bytes());
-    
-        self.write_sector(dir_header_block, &dir_header_data)?;
-    
-        self.add_file_to_directory(ROOT_BLOCK, dir_header_block)?;
-    
+
+        self.write_sector(dir_header_block, &dir_header_data).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to write sector: {}", e))
+        })?;
+
+        self.add_file_to_directory(ROOT_BLOCK, dir_header_block).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to add file to directory: {}", e))
+        })?;
+
         Ok(())
     }
 
     pub fn read_file_contents(&self, block: usize) -> io::Result<Vec<u8>> {
-        let block_data = self.read_sector(block);
+        let block_data = self.read_sector(block).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to read sector: {}", e))
+        })?;
 
         match block_data[0] {
             2 => {
@@ -660,7 +680,9 @@ impl ADF {
                     block_data[19],
                 ]) as usize;
                 while current_block != 0 && contents.len() < file_size {
-                    let data_block = self.read_sector(current_block);
+                    let data_block = self.read_sector(current_block).map_err(|e| {
+                        io::Error::new(io::ErrorKind::Other, format!("Failed to read sector: {}", e))
+                    })?;
                     let data_size = std::cmp::min(512, file_size - contents.len());
                     contents.extend_from_slice(&data_block[..data_size]);
                     current_block = u32::from_be_bytes([
@@ -723,7 +745,7 @@ impl ADF {
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SystemTime error: {}", e)))?;
         let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
         let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
         let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
@@ -732,12 +754,15 @@ impl ADF {
         root_block[ADF_SECTOR_SIZE - 88..ADF_SECTOR_SIZE - 84].copy_from_slice(&mins);
         root_block[ADF_SECTOR_SIZE - 84..ADF_SECTOR_SIZE - 80].copy_from_slice(&ticks);
 
-        self.write_sector(ROOT_BLOCK, &root_block)
+        self.write_sector(ROOT_BLOCK, &root_block).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to write sector: {}", e))
+        })
     }
 
-
     pub fn information(&self) -> io::Result<DiskInfo> {
-        let root_block = self.read_sector(ROOT_BLOCK);
+        let root_block = self.read_sector(ROOT_BLOCK).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to read sector: {}", e))
+        })?;
         Ok(DiskInfo {
             filesystem: if root_block[3] & 1 == 1 {
                 "FFS".to_string()
@@ -791,7 +816,9 @@ impl ADF {
     }
 
     fn read_disk_name(&self) -> io::Result<String> {
-        let root_block = self.read_sector(ROOT_BLOCK);
+        let root_block = self.read_sector(ROOT_BLOCK).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to read sector: {}", e))
+        })?;
         let name_len = root_block[ADF_SECTOR_SIZE - 80] as usize;
         let name = String::from_utf8_lossy(
             &root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len],
