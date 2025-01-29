@@ -12,3 +12,4 @@ mod tests;
 
 pub mod disk;
 pub mod hunk;
+pub mod consts;

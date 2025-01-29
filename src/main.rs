@@ -4,8 +4,9 @@
 // - Volker Schwaberow <volker@schwaberow.de>
 
 use adflib::disk::{
-    BitmapInfo, DiskInfo, DiskType, FileInfo, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS, ADF_TRACK_SIZE,
+    BitmapInfo, DiskInfo, DiskType, FileInfo, ADF
 };
+use adflib::consts::*;
 use chrono::{DateTime, Utc};
 use clap::{Arg, Command};
 use std::fs::File;
