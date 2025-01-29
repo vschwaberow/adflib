@@ -621,6 +621,11 @@ impl ADF {
         dir_header_data[444..448].copy_from_slice(&mins);
         dir_header_data[448..452].copy_from_slice(&ticks);
     
+        for i in 0..72 {
+            dir_header_data[12 + i * 4..16 + i * 4].copy_from_slice(&0u32.to_be_bytes());
+        }
+        dir_header_data[8..12].copy_from_slice(&(ROOT_BLOCK as u32).to_be_bytes());
+    
         self.write_sector(dir_header_block, &dir_header_data)?;
     
         self.add_file_to_directory(ROOT_BLOCK, dir_header_block)?;
