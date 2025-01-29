@@ -652,9 +652,7 @@ impl ADF {
     }
 
     pub fn read_file_contents(&self, block: usize) -> io::Result<Vec<u8>> {
-        let block_data = self.read_sector(block).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("Failed to read sector: {}", e))
-        })?;
+        let block_data = self.read_sector(block);
 
         match block_data[0] {
             2 => {
@@ -680,9 +678,7 @@ impl ADF {
                     block_data[19],
                 ]) as usize;
                 while current_block != 0 && contents.len() < file_size {
-                    let data_block = self.read_sector(current_block).map_err(|e| {
-                        io::Error::new(io::ErrorKind::Other, format!("Failed to read sector: {}", e))
-                    })?;
+                    let data_block = self.read_sector(current_block);
                     let data_size = std::cmp::min(512, file_size - contents.len());
                     contents.extend_from_slice(&data_block[..data_size]);
                     current_block = u32::from_be_bytes([
@@ -760,9 +756,7 @@ impl ADF {
     }
 
     pub fn information(&self) -> io::Result<DiskInfo> {
-        let root_block = self.read_sector(ROOT_BLOCK).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("Failed to read sector: {}", e))
-        })?;
+        let root_block = self.read_sector(ROOT_BLOCK);
         Ok(DiskInfo {
             filesystem: if root_block[3] & 1 == 1 {
                 "FFS".to_string()
@@ -816,9 +810,7 @@ impl ADF {
     }
 
     fn read_disk_name(&self) -> io::Result<String> {
-        let root_block = self.read_sector(ROOT_BLOCK).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("Failed to read sector: {}", e))
-        })?;
+        let root_block = self.read_sector(ROOT_BLOCK);
         let name_len = root_block[ADF_SECTOR_SIZE - 80] as usize;
         let name = String::from_utf8_lossy(
             &root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len],
