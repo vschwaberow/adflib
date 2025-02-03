@@ -81,20 +81,6 @@ cargo install adflib
 ```bash
 adflib <COMMAND> [OPTIONS]
 ```
-Commands:
-
-`info` Display information about an ADF file
-`list` List contents of an ADF file
-`extract` Extract files from an ADF image
-`create` Create a new ADF image
-`bitmap` Show the bitmap of an ADF image
-
-Example:
-
-```bash
-adflib info my_disk.adf
-```
-
 
 ## Development Status
 
