@@ -68,7 +68,7 @@ Read the documentation for more details.
 
 ## Command-line Tool
 
-The library comes with a command-line tool for common ADF operations.
+The command-line tool provides a simple interface for managing ADF files. It's still in early development and doesn't yet support all features. You will find it under https://github.com/vschwaberow/adflib-cli.
 
 ### Installation
 
