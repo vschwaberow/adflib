@@ -9,12 +9,7 @@ use std::fs::File;
 use std::io::{self, Error, ErrorKind, Read, Result, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
-
-pub const ADF_TRACK_SIZE: usize = 11 * ADF_SECTOR_SIZE;
-pub const ADF_NUM_TRACKS: usize = 80 * 2;
-pub const ROOT_BLOCK: usize = 880;
-pub const ADF_SECTOR_SIZE: usize = 512;
-pub const ADF_NUM_SECTORS: usize = 1760;
+use crate::consts::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ADF {
