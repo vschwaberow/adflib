@@ -2,10 +2,10 @@
 mod tests {
     use super::*;
     use crate::disk::{
-        format_creation_date, load_adf_from_zip, DiskType, ADF, ADF_NUM_SECTORS, ADF_NUM_TRACKS,
-        ADF_SECTOR_SIZE, ADF_TRACK_SIZE, ROOT_BLOCK,
+        format_creation_date, load_adf_from_zip, DiskType, ADF
     };
     use crate::dms::{DMSPackingMode, DMSReader};
+    use crate::consts::*;
     use std::io::{self, Cursor};
     use std::{
         io::Write,
