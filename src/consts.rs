@@ -42,4 +42,9 @@ pub const BITMAP_BLOCK_END: usize = ADF_NUM_SECTORS;
 pub const SECONDS_PER_DAY: u64 = 86400;
 pub const SECONDS_PER_HOUR: u64 = 3600;
 pub const SECONDS_PER_MINUTE: u64 = 60;
-
+pub const DMS_HEADER_SIZE_BYTES: usize = 56;
+pub const DMS_TRACK_HEADER_SIZE_BYTES: usize = 20;
+pub const QUICK_TEXT_MASK: u16 = 255;
+pub const QUICK_UNPACK_SIZE_BYTES: usize = 11360;
+pub const SECTORS_PER_TRACK: usize = 16;
+pub const BYTES_PER_SECTOR: usize = 256;

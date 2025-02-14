@@ -3,18 +3,12 @@
 // Copyright (c) 2023
 // - Volker Schwaberow <volker@schwaberow.de>
 
+use crate::consts::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::env;
 use std::fs::File;
 use std::io::{self, Read, Seek, Write};
 use std::process;
-
-const DMS_HEADER_SIZE_BYTES: usize = 56;
-const DMS_TRACK_HEADER_SIZE_BYTES: usize = 20;
-const QUICK_TEXT_MASK: u16 = 255;
-const QUICK_UNPACK_SIZE_BYTES: usize = 11360;
-const SECTORS_PER_TRACK: usize = 16;
-const BYTES_PER_SECTOR: usize = 256;
 
 #[derive(Debug, Clone)]
 pub struct DMSHeader {
