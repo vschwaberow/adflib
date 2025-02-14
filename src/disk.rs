@@ -55,7 +55,13 @@ impl DiskInfo {
 
 impl std::fmt::Display for DiskInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        writeln!(f, "Disk Name: {}", self.disk_name)?;
+        writeln!(f, "Filesystem: {}", self.filesystem)?;
+        writeln!(f, "Disk Size: {} bytes", self.disk_size)?;
+        writeln!(f, "Heads: {}", self.heads)?;
+        writeln!(f, "Tracks: {}", self.tracks)?;
+        writeln!(f, "Sectors per Track: {}", self.sectors_per_track)?;
+        writeln!(f, "Bytes per Sector: {}", self.bytes_per_sector)
     }
 }
 
