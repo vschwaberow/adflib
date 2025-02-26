@@ -43,3 +43,25 @@ pub const SECONDS_PER_DAY: u64 = 86400;
 pub const SECONDS_PER_HOUR: u64 = 3600;
 pub const SECONDS_PER_MINUTE: u64 = 60;
 
+pub const PROTECTION_FLAGS_MASK: u32 = 0xFF;
+pub const PROTECTION_FLAG_HIDDEN: u32 = 0x80;
+pub const PROTECTION_FLAG_SCRIPT: u32 = 0x40;
+pub const PROTECTION_FLAG_PURE: u32 = 0x20;
+pub const PROTECTION_FLAG_ARCHIVE: u32 = 0x10;
+pub const PROTECTION_FLAG_READ: u32 = 0x08;
+pub const PROTECTION_FLAG_WRITE: u32 = 0x04;
+pub const PROTECTION_FLAG_EXECUTE: u32 = 0x02;
+pub const PROTECTION_FLAG_DELETE: u32 = 0x01;
+
+pub const BLOCK_TYPE_OFFSET: usize = 0;
+pub const BLOCK_TYPE_FILE: u8 = 0;
+pub const BLOCK_TYPE_DIRECTORY: u8 = 2;
+
+pub const NEXT_BLOCK_OFFSET: usize = 0;
+pub const DATA_BLOCK_HEADER_SIZE: usize = 24;
+pub const BITMAP_BLOCK_FIRST_BYTE: u8 = 0xF8;
+
+pub const ROOT_BLOCK_BITMAP_FLAG_OFFSET: usize = ADF_SECTOR_SIZE - 200;
+pub const ROOT_BLOCK_BITMAP_FLAG_VALUE: u8 = 0xFF;
+
+pub const TICKS_PER_SECOND: u32 = 50;

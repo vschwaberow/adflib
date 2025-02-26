@@ -387,7 +387,12 @@ impl ADF {
         let name_len = block_data[432] as usize;
         let name = String::from_utf8_lossy(&block_data[433..433 + name_len]).to_string();
 
-        let size = u32::from_be_bytes([block_data[4], block_data[5], block_data[6], block_data[7]]);
+        let size = u32::from_be_bytes([
+            block_data[4],
+            block_data[5],
+            block_data[6],
+            block_data[7],
+        ]);
         let is_dir = block_data[0] == 2;
         let protection = u32::from_be_bytes([
             block_data[436],
@@ -416,9 +421,9 @@ impl ADF {
         ]);
 
         let creation_date = match days
-            .checked_mul(86400)
-            .and_then(|d| d.checked_add(mins.checked_mul(60).unwrap_or(0)))
-            .and_then(|t| t.checked_add(ticks.checked_div(50).unwrap_or(0)))
+            .checked_mul(SECONDS_PER_DAY)
+            .and_then(|d| d.checked_add(mins.checked_mul(SECONDS_PER_MINUTE).unwrap_or(0)))
+            .and_then(|t| t.checked_add(ticks.checked_div(TICKS_PER_SECOND).unwrap_or(0)))
         {
             Some(secs) => SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64),
             None => SystemTime::UNIX_EPOCH,
@@ -434,16 +439,16 @@ impl ADF {
     }
 
     pub fn format_protection_flags(&self, flags: u32) -> String {
-        let masked_flags = flags & 0xFF;   
+        let masked_flags = flags & PROTECTION_FLAGS_MASK;   
         let mut result = String::with_capacity(8);
-        result.push(if masked_flags & 0x80 == 0 { 'h' } else { '-' });
-        result.push(if masked_flags & 0x40 == 0 { 's' } else { '-' });
-        result.push(if masked_flags & 0x20 == 0 { 'p' } else { '-' });
-        result.push(if masked_flags & 0x10 == 0 { 'a' } else { '-' });
-        result.push(if masked_flags & 0x08 == 0 { 'r' } else { '-' });
-        result.push(if masked_flags & 0x04 == 0 { 'w' } else { '-' });
-        result.push(if masked_flags & 0x02 == 0 { 'e' } else { '-' });
-        result.push(if masked_flags & 0x01 == 0 { 'd' } else { '-' });
+        result.push(if masked_flags & PROTECTION_FLAG_HIDDEN == 0 { 'h' } else { '-' });
+        result.push(if masked_flags & PROTECTION_FLAG_SCRIPT == 0 { 's' } else { '-' });
+        result.push(if masked_flags & PROTECTION_FLAG_PURE == 0 { 'p' } else { '-' });
+        result.push(if masked_flags & PROTECTION_FLAG_ARCHIVE == 0 { 'a' } else { '-' });
+        result.push(if masked_flags & PROTECTION_FLAG_READ == 0 { 'r' } else { '-' });
+        result.push(if masked_flags & PROTECTION_FLAG_WRITE == 0 { 'w' } else { '-' });
+        result.push(if masked_flags & PROTECTION_FLAG_EXECUTE == 0 { 'e' } else { '-' });
+        result.push(if masked_flags & PROTECTION_FLAG_DELETE == 0 { 'd' } else { '-' });
         result
     }
 
