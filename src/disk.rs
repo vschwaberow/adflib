@@ -196,7 +196,7 @@ impl ADF {
     fn find_file_header_block(&self, dir_block: usize, file_name: &str) -> io::Result<usize> {
         let block_data = self.read_sector(dir_block);
 
-        for i in (24..=51).rev() {
+        for i in (DIR_ENTRY_START_INDEX..=DIR_ENTRY_END_INDEX).rev() {
             let sector = u32::from_be_bytes([
                 block_data[i * 4],
                 block_data[i * 4 + 1],
@@ -366,7 +366,7 @@ impl ADF {
 
     pub fn list_directory(&self, block: usize) -> impl Iterator<Item = Result<FileInfo>> + '_ {
         let block_data = self.read_sector(block);
-        (24..=51).rev().filter_map(move |i| {
+        (DIR_ENTRY_START_INDEX..=DIR_ENTRY_END_INDEX).rev().filter_map(move |i| {
             let sector = u32::from_be_bytes([
                 block_data[i * 4],
                 block_data[i * 4 + 1],
@@ -384,45 +384,45 @@ impl ADF {
     fn read_file_header(&self, block: usize) -> Result<FileInfo> {
         let block_data = self.read_sector(block);
 
-        let name_len = block_data[432] as usize;
-        let name = String::from_utf8_lossy(&block_data[433..433 + name_len]).to_string();
+        let name_len = block_data[FILE_NAME_LEN_OFFSET] as usize;
+        let name = String::from_utf8_lossy(&block_data[FILE_NAME_OFFSET..FILE_NAME_OFFSET + name_len]).to_string();
 
         let size = u32::from_be_bytes([
-            block_data[4],
-            block_data[5],
-            block_data[6],
-            block_data[7],
+            block_data[FILE_SIZE_OFFSET],
+            block_data[FILE_SIZE_OFFSET + 1],
+            block_data[FILE_SIZE_OFFSET + 2],
+            block_data[FILE_SIZE_OFFSET + 3],
         ]);
-        let is_dir = block_data[0] == 2;
+        let is_dir = block_data[BLOCK_TYPE_OFFSET] == BLOCK_TYPE_DIRECTORY;
         let protection = u32::from_be_bytes([
-            block_data[436],
-            block_data[437],
-            block_data[438],
-            block_data[439],
+            block_data[FILE_PROTECTION_OFFSET],
+            block_data[FILE_PROTECTION_OFFSET + 1],
+            block_data[FILE_PROTECTION_OFFSET + 2],
+            block_data[FILE_PROTECTION_OFFSET + 3],
         ]);
 
         let days = u32::from_be_bytes([
-            block_data[440],
-            block_data[441],
-            block_data[442],
-            block_data[443],
+            block_data[FILE_DAYS_OFFSET],
+            block_data[FILE_DAYS_OFFSET + 1],
+            block_data[FILE_DAYS_OFFSET + 2],
+            block_data[FILE_DAYS_OFFSET + 3],
         ]);
         let mins = u32::from_be_bytes([
-            block_data[444],
-            block_data[445],
-            block_data[446],
-            block_data[447],
+            block_data[FILE_MINS_OFFSET],
+            block_data[FILE_MINS_OFFSET + 1],
+            block_data[FILE_MINS_OFFSET + 2],
+            block_data[FILE_MINS_OFFSET + 3],
         ]);
         let ticks = u32::from_be_bytes([
-            block_data[448],
-            block_data[449],
-            block_data[450],
-            block_data[451],
+            block_data[FILE_TICKS_OFFSET],
+            block_data[FILE_TICKS_OFFSET + 1],
+            block_data[FILE_TICKS_OFFSET + 2],
+            block_data[FILE_TICKS_OFFSET + 3],
         ]);
 
         let creation_date = match days
-            .checked_mul(SECONDS_PER_DAY)
-            .and_then(|d| d.checked_add(mins.checked_mul(SECONDS_PER_MINUTE).unwrap_or(0)))
+            .checked_mul(SECONDS_PER_DAY as u32)
+            .and_then(|d| d.checked_add(mins.checked_mul(SECONDS_PER_MINUTE as u32).unwrap_or(0)))
             .and_then(|t| t.checked_add(ticks.checked_div(TICKS_PER_SECOND).unwrap_or(0)))
         {
             Some(secs) => SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64),
@@ -497,14 +497,14 @@ impl ADF {
         Ok(())
     }
 
-    pub fn initialize_bitmap(&mut self) -> Result<()> {
+    fn initialize_bitmap(&mut self) -> Result<()> {
         let bitmap_block_index = ROOT_BLOCK + 1;
         let mut bitmap_block = vec![0u8; ADF_SECTOR_SIZE];
-        bitmap_block[0] = 0;
-        bitmap_block[1] = 0;
-        let checksum_offset = 20;
-        let checksum = self.calculate_checksum(&bitmap_block[checksum_offset..]);
-        bitmap_block[4..8].copy_from_slice(&checksum.to_be_bytes());
+        bitmap_block[BLOCK_TYPE_OFFSET] = BLOCK_TYPE_BITMAP;
+        bitmap_block[BITMAP_FLAG_OFFSET] = 0;
+        bitmap_block[BITMAP_VALID_OFFSET] = 0xFF;
+        let checksum = self.calculate_checksum(&bitmap_block[BITMAP_CHECKSUM_OFFSET..]);
+        bitmap_block[BITMAP_CHECKSUM_LOCATION..BITMAP_CHECKSUM_LOCATION + 4].copy_from_slice(&checksum.to_be_bytes());
         self.write_sector(bitmap_block_index, &bitmap_block)?;
         self.set_block_used(bitmap_block_index);
         self.update_bitmap_blocks()?;
@@ -615,56 +615,56 @@ impl ADF {
     }
 
     fn write_boot_block(&mut self, disk_type: DiskType) -> Result<()> {
-        let mut boot_block = [0u8; ADF_SECTOR_SIZE * 2];
+        let mut boot_block = [0u8; BOOT_BLOCK_SIZE];
 
-        boot_block[..4].copy_from_slice(b"DOS\0");
+        boot_block[..BOOT_BLOCK_SIGNATURE_SIZE].copy_from_slice(BOOT_BLOCK_SIGNATURE);
 
-        boot_block[3] = match disk_type {
-            DiskType::OFS => 0,
-            DiskType::FFS => 1,
+        boot_block[BOOT_BLOCK_FLAGS_OFFSET] = match disk_type {
+            DiskType::OFS => FILESYSTEM_TYPE_OFS,
+            DiskType::FFS => FILESYSTEM_TYPE_FFS,
         };
 
-        self.data[..ADF_SECTOR_SIZE * 2].copy_from_slice(&boot_block);
+        self.data[..BOOT_BLOCK_SIZE].copy_from_slice(&boot_block);
         Ok(())
     }
 
     fn write_root_block(&mut self, disk_type: DiskType, disk_name: &str) -> Result<()> {
         let mut root_block = [0u8; ADF_SECTOR_SIZE];
 
-        root_block[0] = 2;
+        root_block[BLOCK_TYPE_OFFSET] = BLOCK_TYPE_DIRECTORY;
 
-        root_block[ADF_SECTOR_SIZE - 4] = match disk_type {
-            DiskType::OFS => 0,
-            DiskType::FFS => 1,
+        root_block[ROOT_BLOCK_DISK_TYPE_OFFSET] = match disk_type {
+            DiskType::OFS => FILESYSTEM_TYPE_OFS,
+            DiskType::FFS => FILESYSTEM_TYPE_FFS,
         };
 
-        root_block[12..14].copy_from_slice(&72u16.to_be_bytes());
+        root_block[ROOT_BLOCK_HASH_TABLE_SIZE_OFFSET..ROOT_BLOCK_HASH_TABLE_SIZE_OFFSET + 2].copy_from_slice(&ROOT_BLOCK_HASH_TABLE_SIZE.to_be_bytes());
 
         if matches!(disk_type, DiskType::FFS) {
-            root_block[ADF_SECTOR_SIZE - 200] = 0xFF;
-            for i in 0..25 {
+            root_block[ROOT_BLOCK_BITMAP_FLAG_OFFSET] = 0xFF;
+            for i in 0..ROOT_BLOCK_BITMAP_COUNT {
                 let block_num = u32::to_be_bytes(ROOT_BLOCK as u32 + 1 + i as u32);
-                root_block[ADF_SECTOR_SIZE - 196 + i * 4..ADF_SECTOR_SIZE - 192 + i * 4]
+                root_block[ROOT_BLOCK_BITMAP_POINTERS_OFFSET + i * 4..ROOT_BLOCK_BITMAP_POINTERS_OFFSET + (i + 1) * 4]
                     .copy_from_slice(&block_num);
             }
         }
 
         let name_bytes = disk_name.as_bytes();
-        let name_len = std::cmp::min(name_bytes.len(), 30);
-        root_block[ADF_SECTOR_SIZE - 80] = name_len as u8;
-        root_block[ADF_SECTOR_SIZE - 79..ADF_SECTOR_SIZE - 79 + name_len]
+        let name_len = std::cmp::min(name_bytes.len(), MAX_NAME_LENGTH);
+        root_block[ROOT_BLOCK_NAME_LEN_OFFSET] = name_len as u8;
+        root_block[ROOT_BLOCK_NAME_OFFSET..ROOT_BLOCK_NAME_OFFSET + name_len]
             .copy_from_slice(&name_bytes[..name_len]);
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default();
-        let days = u32::to_be_bytes((now.as_secs() / 86400) as u32);
-        let mins = u32::to_be_bytes(((now.as_secs() % 86400) / 60) as u32);
-        let ticks = u32::to_be_bytes(((now.as_secs() % 60) * 50) as u32);
+        let days = u32::to_be_bytes((now.as_secs() / SECONDS_PER_DAY as u64) as u32);
+        let mins = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_DAY as u64) / SECONDS_PER_MINUTE as u64) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_MINUTE as u64) * TICKS_PER_SECOND) as u32);
 
-        root_block[ADF_SECTOR_SIZE - 92..ADF_SECTOR_SIZE - 88].copy_from_slice(&days);
-        root_block[ADF_SECTOR_SIZE - 88..ADF_SECTOR_SIZE - 84].copy_from_slice(&mins);
-        root_block[ADF_SECTOR_SIZE - 84..ADF_SECTOR_SIZE - 80].copy_from_slice(&ticks);
+        root_block[ROOT_BLOCK_DAYS_OFFSET..ROOT_BLOCK_DAYS_OFFSET + 4].copy_from_slice(&days);
+        root_block[ROOT_BLOCK_MINS_OFFSET..ROOT_BLOCK_MINS_OFFSET + 4].copy_from_slice(&mins);
+        root_block[ROOT_BLOCK_TICKS_OFFSET..ROOT_BLOCK_TICKS_OFFSET + 4].copy_from_slice(&ticks);
 
         self.write_sector(ROOT_BLOCK, &root_block)
     }
@@ -672,12 +672,12 @@ impl ADF {
     fn write_bitmap_blocks(&mut self) -> Result<()> {
         let mut bitmap_block = [0xFFu8; ADF_SECTOR_SIZE];
 
-        bitmap_block[0] = 0xF8;
-        bitmap_block[1] = 0xFF;
-        bitmap_block[2] = 0xFF;
+        bitmap_block[BITMAP_HEADER_OFFSET] = BITMAP_HEADER_VALUE;
+        bitmap_block[BITMAP_FLAG_OFFSET] = 0xFF;
+        bitmap_block[BITMAP_VALID_OFFSET] = 0xFF;
 
-        self.write_sector(ROOT_BLOCK + 1, &bitmap_block)?;
-        self.write_sector(ROOT_BLOCK + 2, &[0xFFu8; ADF_SECTOR_SIZE])?;
+        self.write_sector(BITMAP_BLOCK, &bitmap_block)?;
+        self.write_sector(BITMAP_BLOCK + 1, &[0xFFu8; ADF_SECTOR_SIZE])?;
 
         Ok(())
     }
@@ -808,7 +808,7 @@ impl ADF {
 
     fn is_directory(&self, block: usize) -> bool {
         let block_data = self.read_sector(block);
-        block_data[0] == 2
+        block_data[BLOCK_TYPE_OFFSET] == BLOCK_TYPE_DIRECTORY
     }
 
     fn initialize_directory(
@@ -818,23 +818,23 @@ impl ADF {
         name: &str,
     ) -> io::Result<()> {
         let mut dir_data = [0u8; ADF_SECTOR_SIZE];
-        dir_data[0] = 2;
-        dir_data[4..8].copy_from_slice(&(parent_block as u32).to_be_bytes());
+        dir_data[BLOCK_TYPE_OFFSET] = BLOCK_TYPE_DIRECTORY;
+        dir_data[DIR_PARENT_OFFSET..DIR_PARENT_OFFSET + 4].copy_from_slice(&(parent_block as u32).to_be_bytes());
 
         let name_bytes = name.as_bytes();
-        let name_len = std::cmp::min(name_bytes.len(), 30);
+        let name_len = std::cmp::min(name_bytes.len(), MAX_NAME_LENGTH);
 
-        dir_data[432] = name_len as u8;
-        dir_data[433..433 + name_len].copy_from_slice(&name_bytes[..name_len]);
+        dir_data[FILE_NAME_LEN_OFFSET] = name_len as u8;
+        dir_data[FILE_NAME_OFFSET..FILE_NAME_OFFSET + name_len].copy_from_slice(&name_bytes[..name_len]);
         self.write_sector(new_block, &dir_data)
     }
 
     fn update_directory_name(&mut self, dir_block: usize, new_name: &str) -> io::Result<()> {
         let mut dir_data = self.read_sector(dir_block).to_vec();
         let name_bytes = new_name.as_bytes();
-        let name_len = std::cmp::min(name_bytes.len(), 30);
-        dir_data[432] = name_len as u8;
-        dir_data[433..433 + name_len].copy_from_slice(&name_bytes[..name_len]);
+        let name_len = std::cmp::min(name_bytes.len(), MAX_NAME_LENGTH);
+        dir_data[FILE_NAME_LEN_OFFSET] = name_len as u8;
+        dir_data[FILE_NAME_OFFSET..FILE_NAME_OFFSET + name_len].copy_from_slice(&name_bytes[..name_len]);
         self.write_sector(dir_block, &dir_data)
     }
 
@@ -861,7 +861,7 @@ impl ADF {
     ) -> io::Result<()> {
         let mut dir_data = self.read_sector(dir_block).to_vec();
 
-        for i in (24..=51).rev() {
+        for i in (DIR_ENTRY_START_INDEX..=DIR_ENTRY_END_INDEX).rev() {
             if u32::from_be_bytes([
                 dir_data[i * 4],
                 dir_data[i * 4 + 1],
@@ -881,7 +881,7 @@ impl ADF {
     fn remove_entry_from_directory(&mut self, dir_block: usize, name: &str) -> io::Result<()> {
         let mut dir_data = self.read_sector(dir_block).to_vec();
 
-        for i in (24..=51).rev() {
+        for i in (DIR_ENTRY_START_INDEX..=DIR_ENTRY_END_INDEX).rev() {
             let entry_block = u32::from_be_bytes([
                 dir_data[i * 4],
                 dir_data[i * 4 + 1],
@@ -890,9 +890,9 @@ impl ADF {
             ]);
             if entry_block != 0 {
                 let entry_data = self.read_sector(entry_block as usize);
-                let entry_name_len = entry_data[432] as usize;
+                let entry_name_len = entry_data[FILE_NAME_LEN_OFFSET] as usize;
                 let entry_name =
-                    String::from_utf8_lossy(&entry_data[433..433 + entry_name_len]).to_string();
+                    String::from_utf8_lossy(&entry_data[FILE_NAME_OFFSET..FILE_NAME_OFFSET + entry_name_len]).to_string();
                 if entry_name == name {
                     dir_data[i * 4..i * 4 + 4].copy_from_slice(&0u32.to_be_bytes());
                     self.write_sector(dir_block, &dir_data)?;
@@ -912,7 +912,7 @@ impl ADF {
     ) -> io::Result<()> {
         let dir_data = self.read_sector(dir_block);
 
-        for i in (24..=51).rev() {
+        for i in (DIR_ENTRY_START_INDEX..=DIR_ENTRY_END_INDEX).rev() {
             let entry_block = u32::from_be_bytes([
                 dir_data[i * 4],
                 dir_data[i * 4 + 1],
@@ -921,14 +921,14 @@ impl ADF {
             ]);
             if entry_block != 0 {
                 let mut entry_data = self.read_sector(entry_block as usize).to_vec();
-                let entry_name_len = entry_data[432] as usize;
+                let entry_name_len = entry_data[FILE_NAME_LEN_OFFSET] as usize;
                 let entry_name =
-                    String::from_utf8_lossy(&entry_data[433..433 + entry_name_len]).to_string();
+                    String::from_utf8_lossy(&entry_data[FILE_NAME_OFFSET..FILE_NAME_OFFSET + entry_name_len]).to_string();
                 if entry_name == old_name {
                     let new_name_bytes = new_name.as_bytes();
-                    let new_name_len = std::cmp::min(new_name_bytes.len(), 30);
-                    entry_data[432] = new_name_len as u8;
-                    entry_data[433..433 + new_name_len]
+                    let new_name_len = std::cmp::min(new_name_bytes.len(), MAX_NAME_LENGTH);
+                    entry_data[FILE_NAME_LEN_OFFSET] = new_name_len as u8;
+                    entry_data[FILE_NAME_OFFSET..FILE_NAME_OFFSET + new_name_len]
                         .copy_from_slice(&new_name_bytes[..new_name_len]);
                     self.write_sector(entry_block as usize, &entry_data)?;
                     return Ok(());
