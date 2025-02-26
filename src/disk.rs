@@ -501,7 +501,7 @@ impl ADF {
         let bitmap_block_index = ROOT_BLOCK + 1;
         let mut bitmap_block = vec![0u8; ADF_SECTOR_SIZE];
         bitmap_block[BLOCK_TYPE_OFFSET] = BLOCK_TYPE_BITMAP;
-        bitmap_block[BITMAP_FLAG_OFFSET] = 0;
+        bitmap_block[BITMAP_FLAG_OFFSET] = 0xFF;
         bitmap_block[BITMAP_VALID_OFFSET] = 0xFF;
         let checksum = self.calculate_checksum(&bitmap_block[BITMAP_CHECKSUM_OFFSET..]);
         bitmap_block[BITMAP_CHECKSUM_LOCATION..BITMAP_CHECKSUM_LOCATION + 4].copy_from_slice(&checksum.to_be_bytes());
@@ -660,7 +660,7 @@ impl ADF {
             .unwrap_or_default();
         let days = u32::to_be_bytes((now.as_secs() / SECONDS_PER_DAY as u64) as u32);
         let mins = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_DAY as u64) / SECONDS_PER_MINUTE as u64) as u32);
-        let ticks = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_MINUTE as u64) * TICKS_PER_SECOND) as u32);
+        let ticks = u32::to_be_bytes(((now.as_secs() % SECONDS_PER_MINUTE as u64) * (TICKS_PER_SECOND as u64)) as u32);
 
         root_block[ROOT_BLOCK_DAYS_OFFSET..ROOT_BLOCK_DAYS_OFFSET + 4].copy_from_slice(&days);
         root_block[ROOT_BLOCK_MINS_OFFSET..ROOT_BLOCK_MINS_OFFSET + 4].copy_from_slice(&mins);
