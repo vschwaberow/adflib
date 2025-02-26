@@ -434,15 +434,16 @@ impl ADF {
     }
 
     pub fn format_protection_flags(&self, flags: u32) -> String {
+        let masked_flags = flags & 0xFF;   
         let mut result = String::with_capacity(8);
-        result.push(if flags & 0x80 == 0 { 'h' } else { '-' });
-        result.push(if flags & 0x40 == 0 { 's' } else { '-' });
-        result.push(if flags & 0x20 == 0 { 'p' } else { '-' });
-        result.push(if flags & 0x10 == 0 { 'a' } else { '-' });
-        result.push(if flags & 0x08 == 0 { 'r' } else { '-' });
-        result.push(if flags & 0x04 == 0 { 'w' } else { '-' });
-        result.push(if flags & 0x02 == 0 { 'e' } else { '-' });
-        result.push(if flags & 0x01 == 0 { 'd' } else { '-' });
+        result.push(if masked_flags & 0x80 == 0 { 'h' } else { '-' });
+        result.push(if masked_flags & 0x40 == 0 { 's' } else { '-' });
+        result.push(if masked_flags & 0x20 == 0 { 'p' } else { '-' });
+        result.push(if masked_flags & 0x10 == 0 { 'a' } else { '-' });
+        result.push(if masked_flags & 0x08 == 0 { 'r' } else { '-' });
+        result.push(if masked_flags & 0x04 == 0 { 'w' } else { '-' });
+        result.push(if masked_flags & 0x02 == 0 { 'e' } else { '-' });
+        result.push(if masked_flags & 0x01 == 0 { 'd' } else { '-' });
         result
     }
 
