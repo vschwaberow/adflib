@@ -10,7 +10,8 @@
 #[cfg(test)]
 mod tests;
 
+pub mod consts;
 pub mod disk;
 pub mod dms;
+pub mod error;
 pub mod hunk;
-pub mod consts;
