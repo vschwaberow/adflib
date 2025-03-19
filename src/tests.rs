@@ -1,11 +1,9 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::disk::{
-        format_creation_date, load_adf_from_zip, DiskType, ADF
-    };
-    use crate::dms::{DMSPackingMode, DMSReader};
     use crate::consts::*;
+    use crate::disk::{format_creation_date, load_adf_from_zip, DiskType, ADF};
+    use crate::dms::{DMSPackingMode, DMSReader};
     use std::io::{self, Cursor};
     use std::{
         io::Write,
@@ -29,7 +27,8 @@ mod tests {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
             bitmap: vec![false; ADF_NUM_SECTORS],
         };
-        adf.format(DiskType::OFS, "TestDisk").unwrap();
+        //adf.format(DiskType::OFS, "TestDisk").unwrap();
+        adf.format_disk("TestDisk").unwrap();
 
         let boot_block = adf.read_boot_block();
         assert_eq!(&boot_block[0..3], b"DOS");
@@ -52,7 +51,8 @@ mod tests {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
             bitmap: vec![false; ADF_NUM_SECTORS],
         };
-        adf.format(DiskType::OFS, "TestDisk").unwrap();
+       // adf.format(DiskType::OFS, "TestDisk").unwrap();
+        adf.format_disk("TestDisk").unwrap();
 
         let files = adf.list_root_directory().unwrap();
         assert!(files.is_empty());
@@ -64,7 +64,8 @@ mod tests {
             data: vec![0; ADF_TRACK_SIZE * ADF_NUM_TRACKS],
             bitmap: vec![false; ADF_NUM_SECTORS],
         };
-        adf.format(DiskType::FFS, "TestDisk").unwrap();
+    //    adf.format(DiskType::FFS, "TestDisk").unwrap();
+        adf.format_disk("TestDisk").unwrap();
         let info = adf.information().unwrap();
         assert_eq!(info.disk_name, "TestDisk");
         assert_eq!(info.disk_size, (ADF_TRACK_SIZE * ADF_NUM_TRACKS) as u32);
@@ -149,7 +150,7 @@ mod tests {
 
         assert_eq!(info.signature, "DMS!");
         assert_eq!(info.header_type, "PRO ");
-      //  assert_eq!(info.info_bits, 1);
+        //  assert_eq!(info.info_bits, 1);
         assert_eq!(info.date, 2);
         assert_eq!(info.low_track, 0);
         assert_eq!(info.high_track, 79);
@@ -234,7 +235,8 @@ mod tests {
 
     fn create_test_adf() -> ADF {
         let mut adf = ADF::new(ADF_NUM_SECTORS, ADF_SECTOR_SIZE);
-        adf.format(DiskType::FFS, "TestDisk").unwrap();
+       // adf.format(DiskType::FFS, "TestDisk").unwrap();
+        adf.format_disk("TestDisk").unwrap();
         adf
     }
 
@@ -242,7 +244,7 @@ mod tests {
     fn test_create_directory() {
         let mut adf = create_test_adf();
 
-        adf.create_directory("TestDir").unwrap();
+        adf.create_directory("/", "TestDir").unwrap();
 
         let root_files = adf.list_root_directory().unwrap();
         let test_dir = root_files.iter().find(|f| f.name == "TestDir" && f.is_dir);
@@ -253,8 +255,8 @@ mod tests {
     fn test_rename_directory() {
         let mut adf = create_test_adf();
 
-        adf.create_directory("OldDir").unwrap();
-        adf.rename_directory("OldDir", "NewDir").unwrap();
+        adf.create_directory("/","OldDir").unwrap();
+        adf.rename_directory("/","OldDir", "NewDir").unwrap();
 
         let root_files = adf.list_root_directory().unwrap();
         let old_dir = root_files.iter().find(|f| f.name == "OldDir");
@@ -268,7 +270,7 @@ mod tests {
     fn test_delete_directory() {
         let mut adf = create_test_adf();
 
-        adf.create_directory("DeleteMe").unwrap();
+        adf.create_directory("/","DeleteMe").unwrap();
         adf.delete_directory("DeleteMe").unwrap();
 
         let root_files = adf.list_root_directory().unwrap();
@@ -281,8 +283,8 @@ mod tests {
     fn test_delete_non_empty_directory() {
         let mut adf = create_test_adf();
 
-        adf.create_directory("ParentDir").unwrap();
-        adf.create_directory("ParentDir/ChildDir").unwrap();
+        adf.create_directory("/", "ParentDir").unwrap();
+        adf.create_directory("ParentDir","ParentDir/ChildDir").unwrap();
 
         let result = adf.delete_directory("ParentDir");
 
@@ -293,7 +295,7 @@ mod tests {
     fn test_rename_non_existent_directory() {
         let mut adf = create_test_adf();
 
-        let result = adf.rename_directory("NonExistent", "NewName");
+        let result = adf.rename_directory("/","NonExistent", "NewName");
 
         assert!(
             result.is_err(),
